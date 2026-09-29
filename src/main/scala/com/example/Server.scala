@@ -1,5 +1,8 @@
 package com.example
 
+import java.time.Clock
+import java.util.UUID
+
 import com.example.banking.application.DepositService
 import com.example.banking.http.BankingServlet
 import com.example.banking.infrastructure.InMemoryAccountRepository
@@ -12,7 +15,11 @@ object Server:
     val server = new JettyServer(port)
     val context = new ServletContextHandler()
     val accountRepository = new InMemoryAccountRepository()
-    val depositService = new DepositService(accountRepository)
+    val depositService = new DepositService(
+      accountRepository,
+      Clock.systemUTC(),
+      () => UUID.randomUUID()
+    )
 
     context.setContextPath("/")
     context.addServlet(new ServletHolder(new PingServlet()), "/*")

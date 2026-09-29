@@ -1,5 +1,8 @@
 package com.example.banking.domain
 
+import java.time.Instant
+import java.util.UUID
+
 final case class AccountId private (value: String) derives CanEqual
 
 object AccountId:
@@ -22,6 +25,19 @@ object Money:
       Right(Money(amount))
 
 final case class Account(id: AccountId, balance: BigDecimal) derives CanEqual
+
+sealed trait DomainEvent derives CanEqual:
+  def occurredAt: Instant
+
+final case class DepositId(value: UUID) derives CanEqual
+
+final case class DepositCompleted(
+    depositId: DepositId,
+    accountId: AccountId,
+    amount: Money,
+    resultingBalance: BigDecimal,
+    occurredAt: Instant
+) extends DomainEvent
 
 enum BankingError(val code: String, val message: String) derives CanEqual:
   case InvalidAccountId

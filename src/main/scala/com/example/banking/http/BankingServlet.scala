@@ -25,8 +25,8 @@ final class BankingServlet(depositService: DepositService)
   post("/:accountId/deposits") {
     val depositResult = for
       request <- parseDepositRequest()
-      account <- depositService.deposit(params("accountId"), request.amount)
-    yield DepositResponse(account.id.value, account.balance)
+      result <- depositService.deposit(params("accountId"), request.amount)
+    yield DepositResponse(result.account.id.value, result.account.balance)
 
     depositResult match
       case Right(depositResponse) =>

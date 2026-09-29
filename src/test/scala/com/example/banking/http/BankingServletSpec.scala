@@ -1,5 +1,8 @@
 package com.example.banking.http
 
+import java.time.Clock
+import java.util.UUID
+
 import com.example.banking.application.DepositService
 import com.example.banking.infrastructure.InMemoryAccountRepository
 import org.json4s.*
@@ -8,7 +11,11 @@ import org.scalatra.test.scalatest.ScalatraFunSuite
 
 final class BankingServletSpec extends ScalatraFunSuite:
   private implicit val jsonFormats: Formats = DefaultFormats
-  private val depositService = new DepositService(new InMemoryAccountRepository())
+  private val depositService = new DepositService(
+    new InMemoryAccountRepository(),
+    Clock.systemUTC(),
+    () => UUID.randomUUID()
+  )
 
   addServlet(new BankingServlet(depositService), "/accounts/*")
 

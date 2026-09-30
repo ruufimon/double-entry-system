@@ -1,17 +1,19 @@
 package com.example.banking.application
 
-import java.time.{Clock, Instant, ZoneOffset}
+import java.time.{Clock, Duration, Instant, ZoneOffset}
 import java.util.UUID
 
-import com.example.banking.domain.AuditLogEntry
-import com.example.banking.infrastructure.{
-  BillSeed,
-  InMemoryAccountRepository,
-  InMemoryAuditLogRepository,
-  InMemoryBillerGateway,
-  InMemoryBillPaymentInquiryRepository,
-  LocalMessageBus
+import com.example.banking.domain.{AccountId, AuditLogEntry, BankingOperation, Money}
+import com.example.banking.infrastructure.{InMemoryAuditLogRepository, LocalMessageBus}
+import com.example.banking.ledger.LedgerBackedAccountOperations
+import com.example.banking.ledger.infrastructure.InMemoryLedgerRepository
+import com.example.billpayment.domain.{
+  BillerCode,
+  BillPaymentCompleted,
+  BillPaymentId,
+  BillPaymentInquiryId
 }
+import com.example.domain.DomainError
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 
@@ -23,7 +25,7 @@ final class AuditLogServiceSpec extends AnyFunSuite with Matchers:
     val auditLogRepository = new InMemoryAuditLogRepository()
     val auditLogService = new AuditLogService(messageBus, auditLogRepository)
     val depositService = new DepositService(
-      new InMemoryAccountRepository(),
+      new LedgerBackedAccountOperations(new InMemoryLedgerRepository()),
       messageBus,
       Clock.fixed(occurredAt, ZoneOffset.UTC),
       () => depositId
@@ -31,6 +33,7 @@ final class AuditLogServiceSpec extends AnyFunSuite with Matchers:
     auditLogService.subscribe()
 
     val depositResult = depositService.deposit("account-123", BigDecimal("25.50"))
+    messageBus.awaitIdle(Duration.ofSeconds(3)) shouldBe true
 
     depositResult match
       case Right(result) =>
@@ -43,7 +46,7 @@ final class AuditLogServiceSpec extends AnyFunSuite with Matchers:
     val auditLogRepository = new InMemoryAuditLogRepository()
     val auditLogService = new AuditLogService(messageBus, auditLogRepository)
     val depositService = new DepositService(
-      new InMemoryAccountRepository(),
+      new LedgerBackedAccountOperations(new InMemoryLedgerRepository()),
       messageBus,
       Clock.systemUTC(),
       () => UUID.randomUUID()
@@ -52,23 +55,24 @@ final class AuditLogServiceSpec extends AnyFunSuite with Matchers:
     auditLogService.subscribe()
 
     depositService.deposit("account-123", BigDecimal("10.00"))
+    messageBus.awaitIdle(Duration.ofSeconds(3)) shouldBe true
 
     auditLogRepository.entries should have size 1
   }
 
   test("completed withdrawal creates a withdrawal audit log entry") {
     val messageBus = new LocalMessageBus()
-    val accountRepository = new InMemoryAccountRepository()
+    val accountOperations = new LedgerBackedAccountOperations(new InMemoryLedgerRepository())
     val auditLogRepository = new InMemoryAuditLogRepository()
     val auditLogService = new AuditLogService(messageBus, auditLogRepository)
     val depositService = new DepositService(
-      accountRepository,
+      accountOperations,
       messageBus,
       Clock.systemUTC(),
       () => UUID.randomUUID()
     )
     val withdrawService = new WithdrawService(
-      accountRepository,
+      accountOperations,
       messageBus,
       Clock.systemUTC(),
       () => UUID.randomUUID()
@@ -77,6 +81,7 @@ final class AuditLogServiceSpec extends AnyFunSuite with Matchers:
     depositService.deposit("account-123", BigDecimal("20.00"))
 
     val withdrawalResult = withdrawService.withdraw("account-123", BigDecimal("5.00"))
+    messageBus.awaitIdle(Duration.ofSeconds(3)) shouldBe true
 
     withdrawalResult match
       case Right(result) =>
@@ -87,45 +92,33 @@ final class AuditLogServiceSpec extends AnyFunSuite with Matchers:
   test("completed bill payment creates a bill payment audit log entry") {
     val occurredAt = Instant.parse("2026-09-30T02:00:00Z")
     val messageBus = new LocalMessageBus()
-    val accountRepository = new InMemoryAccountRepository()
     val auditLogRepository = new InMemoryAuditLogRepository()
     val auditLogService = new AuditLogService(messageBus, auditLogRepository)
-    val depositService = new DepositService(
-      accountRepository,
-      messageBus,
-      Clock.fixed(occurredAt, ZoneOffset.UTC),
-      () => UUID.randomUUID()
-    )
-    val billPaymentService = new BillPaymentService(
-      accountRepository,
-      new InMemoryBillerGateway(
-        Vector(
-          BillSeed("demo-biller", "customer-001", "invoice-001", BigDecimal("100.00"))
-        )
-      ),
-      new InMemoryBillPaymentInquiryRepository(),
-      messageBus,
-      Clock.fixed(occurredAt, ZoneOffset.UTC),
-      () => UUID.randomUUID(),
-      () => UUID.randomUUID()
+    val event = BillPaymentCompleted(
+      paymentId = BillPaymentId(UUID.randomUUID()),
+      inquiryId = BillPaymentInquiryId(UUID.randomUUID()),
+      accountId = requireRight(AccountId.from("account-123")),
+      billerCode = requireRight(BillerCode.from("demo-biller")),
+      amount = requireRight(Money.positive(BigDecimal("100.00"))),
+      resultingBalance = BigDecimal("50.00"),
+      billerReceiptCode = "receipt-123",
+      occurredAt = occurredAt
     )
     auditLogService.subscribe()
-    depositService.deposit("account-123", BigDecimal("150.00"))
-    val inquiryResult = billPaymentService.inquire(
-      "account-123",
-      "demo-biller",
-      "customer-001",
-      "invoice-001"
-    )
+    messageBus.publish(event)
+    messageBus.awaitIdle(Duration.ofSeconds(3)) shouldBe true
 
-    inquiryResult match
-      case Right(inquiry) =>
-        billPaymentService.confirm(
-          "account-123",
-          inquiry.inquiry.inquiryId.value.toString
-        ) match
-          case Right(result) =>
-            auditLogRepository.entries.last shouldBe AuditLogEntry.from(result.event)
-          case Left(error) => fail(s"Expected a completed bill payment, got ${error.code}")
-      case Left(error) => fail(s"Expected a bill inquiry, got ${error.code}")
+    val auditEntry = auditLogRepository.entries.last
+    auditEntry.transactionId shouldBe event.paymentId.value
+    auditEntry.operation shouldBe BankingOperation.BillPayment
+    auditEntry.accountId shouldBe event.accountId
+    auditEntry.amount shouldBe event.amount
+    auditEntry.resultingBalance shouldBe event.resultingBalance
+    auditEntry.occurredAt shouldBe event.occurredAt
   }
+
+  private def requireRight[A](result: Either[?, A]): A =
+    result match
+      case Right(value) => value
+      case Left(error: DomainError) => fail(s"Expected Right, got ${error.code}: ${error.message}")
+      case Left(error) => fail(s"Expected Right, got $error")

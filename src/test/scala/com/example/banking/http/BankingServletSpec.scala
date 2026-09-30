@@ -2,15 +2,17 @@ package com.example.banking.http
 
 import java.time.Clock
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicReference
 
-import com.example.banking.application.{BillPaymentService, DepositService, WithdrawService}
-import com.example.banking.infrastructure.{
+import com.example.banking.application.{DepositService, WithdrawService}
+import com.example.banking.infrastructure.LocalMessageBus
+import com.example.banking.ledger.LedgerBackedAccountOperations
+import com.example.banking.ledger.infrastructure.InMemoryLedgerRepository
+import com.example.billpayment.application.BillPaymentService
+import com.example.billpayment.infrastructure.{
   BillSeed,
-  InMemoryAccountRepository,
   InMemoryBillerGateway,
   InMemoryBillPaymentInquiryRepository,
-  LocalMessageBus
+  InMemoryBillPaymentProcessRepository
 }
 import org.json4s.*
 import org.json4s.jackson.JsonMethods.parse
@@ -18,26 +20,28 @@ import org.scalatra.test.scalatest.ScalatraFunSuite
 
 final class BankingServletSpec extends ScalatraFunSuite:
   private implicit val jsonFormats: Formats = DefaultFormats
-  private val accountRepository = new InMemoryAccountRepository()
+  private val accountOperations = new LedgerBackedAccountOperations(
+    new InMemoryLedgerRepository()
+  )
   private val messageBus = new LocalMessageBus()
   private val depositService = new DepositService(
-    accountRepository,
+    accountOperations,
     messageBus,
     Clock.systemUTC(),
     () => UUID.randomUUID()
   )
   private val withdrawService = new WithdrawService(
-    accountRepository,
+    accountOperations,
     messageBus,
     Clock.systemUTC(),
     () => UUID.randomUUID()
   )
   private val billPaymentService = new BillPaymentService(
-    accountRepository,
     new InMemoryBillerGateway(
       Vector(BillSeed("demo-biller", "customer-001", "invoice-001", BigDecimal("100.00")))
     ),
     new InMemoryBillPaymentInquiryRepository(),
+    new InMemoryBillPaymentProcessRepository(),
     messageBus,
     Clock.systemUTC(),
     () => UUID.randomUUID(),
@@ -45,7 +49,7 @@ final class BankingServletSpec extends ScalatraFunSuite:
   )
 
   addServlet(
-    new BankingServlet(depositService, withdrawService, billPaymentService),
+    new BankingServlet(depositService, withdrawService, billPaymentService, accountOperations),
     "/accounts/*"
   )
 
@@ -113,45 +117,49 @@ final class BankingServletSpec extends ScalatraFunSuite:
     }
   }
 
-  test("bill payment inquiry and confirmation complete the quoted debt") {
-    val inquiryId = new AtomicReference[String]()
-    postJson("/accounts/bill-account/deposits", """{"amount":150.00}""") {
+  test("GET /accounts/:accountId/balance returns the ledger-derived THB balance") {
+    postJson("/accounts/balance-account/deposits", """{"amount":40.00}""") {
+      status shouldBe 200
+    }
+    postJson("/accounts/balance-account/withdrawals", """{"amount":12.50}""") {
       status shouldBe 200
     }
 
-    postJson(
-      "/accounts/bill-account/bill-payments/inquiries",
-      """{"billerCode":"demo-biller","referenceCode1":"customer-001","referenceCode2":"invoice-001"}"""
-    ) {
+    get("/accounts/balance-account/balance") {
       status shouldBe 200
-      (parse(body) \ "currentDebt").extract[BigDecimal] shouldBe BigDecimal("100.00")
-      inquiryId.set((parse(body) \ "inquiryId").extract[String])
-    }
-
-    postJson(
-      s"/accounts/bill-account/bill-payments/${inquiryId.get()}/confirm",
-      "{}"
-    ) {
-      status shouldBe 200
-      (parse(body) \ "accountId").extract[String] shouldBe "bill-account"
-      (parse(body) \ "billerCode").extract[String] shouldBe "demo-biller"
-      (parse(body) \ "amount").extract[BigDecimal] shouldBe BigDecimal("100.00")
-      (parse(body) \ "resultingBalance").extract[BigDecimal] shouldBe BigDecimal("50.00")
-      (parse(body) \ "billerReceiptCode").extract[String] should not be empty
+      (parse(body) \ "accountId").extract[String] shouldBe "balance-account"
+      (parse(body) \ "currency").extract[String] shouldBe "THB"
+      (parse(body) \ "balance").extract[BigDecimal] shouldBe BigDecimal("27.50")
     }
   }
 
-  test("bill payment inquiry rejects unknown bill references") {
-    postJson("/accounts/reference-account/deposits", """{"amount":100.00}""") {
+  test("GET /accounts/:accountId/activities returns customer-facing ledger activity") {
+    postJson("/accounts/activity-account/deposits", """{"amount":20.00}""") {
+      status shouldBe 200
+    }
+    postJson("/accounts/activity-account/withdrawals", """{"amount":5.00}""") {
       status shouldBe 200
     }
 
-    postJson(
-      "/accounts/reference-account/bill-payments/inquiries",
-      """{"billerCode":"demo-biller","referenceCode1":"unknown","referenceCode2":"unknown"}"""
-    ) {
+    get("/accounts/activity-account/activities") {
+      status shouldBe 200
+      val activities = parse(body).extract[Vector[AccountActivityResponse]]
+      activities.map(_.operation) shouldBe Vector("deposit", "withdrawal")
+      activities.map(_.effect) shouldBe Vector("increase", "decrease")
+      activities.map(_.balanceAfter) shouldBe Vector(BigDecimal("20.00"), BigDecimal("15.00"))
+      activities.foreach(_.currency shouldBe "THB")
+    }
+  }
+
+  test("GET account ledger resources rejects an unknown account") {
+    get("/accounts/unknown-ledger-account/balance") {
       status shouldBe 404
-      (parse(body) \ "error").extract[String] shouldBe "bill_not_found"
+      (parse(body) \ "error").extract[String] shouldBe "account_not_found"
+    }
+
+    get("/accounts/unknown-ledger-account/activities") {
+      status shouldBe 404
+      (parse(body) \ "error").extract[String] shouldBe "account_not_found"
     }
   }
 

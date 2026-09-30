@@ -2,8 +2,20 @@ package com.example.banking.http
 
 import scala.util.control.NonFatal
 
-import com.example.banking.application.{BillPaymentService, DepositService, WithdrawService}
-import com.example.banking.domain.BankingError
+import com.example.banking.application.{DepositService, WithdrawService}
+import com.example.banking.domain.{
+  AccountActivity,
+  AccountActivityStatus,
+  AccountId,
+  BalanceEffect,
+  BankingError,
+  BankingOperation
+}
+import com.example.banking.ledger.LedgerError
+import com.example.banking.ports.AccountOperations
+import com.example.billpayment.application.BillPaymentService
+import com.example.billpayment.http.BillPaymentRoutes
+import com.example.domain.DomainError
 import org.json4s.*
 import org.scalatra.ScalatraServlet
 import org.scalatra.json.JacksonJsonSupport
@@ -12,38 +24,29 @@ final case class DepositRequest(amount: BigDecimal)
 final case class DepositResponse(accountId: String, balance: BigDecimal)
 final case class WithdrawalRequest(amount: BigDecimal)
 final case class WithdrawalResponse(accountId: String, balance: BigDecimal)
-final case class BillPaymentInquiryRequest(
-    billerCode: String,
-    referenceCode1: String,
-    referenceCode2: String
-)
-final case class BillPaymentInquiryResponse(
-    inquiryId: String,
-    billerCode: String,
-    referenceCode1: String,
-    referenceCode2: String,
-    currentDebt: BigDecimal,
-    expiresAt: String
-)
-final case class BillPaymentConfirmationResponse(
-    paymentId: String,
-    inquiryId: String,
-    accountId: String,
-    billerCode: String,
+final case class AccountBalanceResponse(accountId: String, currency: String, balance: BigDecimal)
+final case class AccountActivityResponse(
+    transactionId: String,
+    operation: String,
+    effect: String,
     amount: BigDecimal,
-    resultingBalance: BigDecimal,
-    billerReceiptCode: String,
-    paidAt: String
+    currency: String,
+    balanceAfter: BigDecimal,
+    occurredAt: String,
+    status: String,
+    originalTransactionId: Option[String]
 )
 final case class ErrorResponse(error: String, message: String)
 
 final class BankingServlet(
     depositService: DepositService,
     withdrawService: WithdrawService,
-    billPaymentService: BillPaymentService
+    protected val billPaymentService: BillPaymentService,
+    accountOperations: AccountOperations
 )
     extends ScalatraServlet
-    with JacksonJsonSupport:
+    with JacksonJsonSupport
+    with BillPaymentRoutes:
 
   override protected implicit lazy val jsonFormats: Formats = DefaultFormats
 
@@ -81,46 +84,22 @@ final class BankingServlet(
         ErrorResponse(bankingError.code, bankingError.message)
   }
 
-  post("/:accountId/bill-payments/inquiries") {
-    val inquiryResult = for
-      request <- parseBillPaymentInquiryRequest()
-      result <- billPaymentService.inquire(
-        params("accountId"),
-        request.billerCode,
-        request.referenceCode1,
-        request.referenceCode2
-      )
-    yield
-      val inquiry = result.inquiry
-      BillPaymentInquiryResponse(
-        inquiryId = inquiry.inquiryId.value.toString,
-        billerCode = inquiry.debt.billerCode.value,
-        referenceCode1 = inquiry.debt.referenceCode1.value,
-        referenceCode2 = inquiry.debt.referenceCode2.value,
-        currentDebt = inquiry.debt.amount.amount,
-        expiresAt = inquiry.expiresAt.toString
-      )
+  get("/:accountId/balance") {
+    val result = for
+      accountId <- AccountId.from(params("accountId"))
+      account <- accountOperations.find(accountId)
+    yield AccountBalanceResponse(account.id.value, "THB", account.balance)
 
-    respond(inquiryResult)
+    respond(result)
   }
 
-  post("/:accountId/bill-payments/:inquiryId/confirm") {
-    val confirmationResult = billPaymentService
-      .confirm(params("accountId"), params("inquiryId"))
-      .map { result =>
-        BillPaymentConfirmationResponse(
-          paymentId = result.event.paymentId.value.toString,
-          inquiryId = result.inquiry.inquiryId.value.toString,
-          accountId = result.account.id.value,
-          billerCode = result.inquiry.debt.billerCode.value,
-          amount = result.event.amount.amount,
-          resultingBalance = result.account.balance,
-          billerReceiptCode = result.billerReceipt.receiptCode,
-          paidAt = result.billerReceipt.paidAt.toString
-        )
-      }
+  get("/:accountId/activities") {
+    val result = for
+      accountId <- AccountId.from(params("accountId"))
+      activities <- accountOperations.activities(accountId)
+    yield activities.map(toActivityResponse)
 
-    respond(confirmationResult)
+    respond(result)
   }
 
   private def parseDepositRequest(): Either[BankingError, DepositRequest] =
@@ -143,36 +122,41 @@ final class BankingServlet(
           )
         )
 
-  private def parseBillPaymentInquiryRequest()
-      : Either[BankingError, BillPaymentInquiryRequest] =
-    try Right(parsedBody.extract[BillPaymentInquiryRequest])
-    catch
-      case NonFatal(_) =>
-        Left(
-          BankingError.InvalidRequest(
-            "Request body must contain billerCode, referenceCode1, and referenceCode2"
-          )
-        )
-
-  private def respond[A](result: Either[BankingError, A]): Any =
+  private def respond[A](result: Either[DomainError, A]): Any =
     result match
       case Right(responseBody) =>
         status = 200
         responseBody
-      case Left(bankingError) =>
-        status = errorStatus(bankingError)
-        ErrorResponse(bankingError.code, bankingError.message)
+      case Left(error) =>
+        status = errorStatus(error)
+        ErrorResponse(error.code, error.message)
 
-  private def errorStatus(error: BankingError): Int =
+  private def toActivityResponse(activity: AccountActivity): AccountActivityResponse =
+    AccountActivityResponse(
+      transactionId = activity.transactionId.toString,
+      operation = activity.operation match
+        case BankingOperation.Deposit     => "deposit"
+        case BankingOperation.Withdrawal  => "withdrawal"
+        case BankingOperation.BillPayment => "bill_payment"
+        case BankingOperation.BillPaymentReversal => "bill_payment_reversal",
+      effect = activity.effect match
+        case BalanceEffect.Increase => "increase"
+        case BalanceEffect.Decrease => "decrease",
+      amount = activity.amount,
+      currency = activity.currency.code,
+      balanceAfter = activity.balanceAfter,
+      occurredAt = activity.occurredAt.toString,
+      status = activity.status match
+        case AccountActivityStatus.Posted   => "posted"
+        case AccountActivityStatus.Reversed => "reversed",
+      originalTransactionId = activity.originalTransactionId.map(_.toString)
+    )
+
+  private def errorStatus(error: DomainError): Int =
     error match
-      case BankingError.AccountNotFound(_) |
-          BankingError.BillerNotFound(_) |
-          BankingError.BillNotFound |
-          BankingError.BillPaymentInquiryNotFound => 404
-      case BankingError.InsufficientFunds(_, _) |
-          BankingError.BillNotPayable |
-          BankingError.BillPaymentAlreadyCompleted |
-          BankingError.BillPaymentInProgress => 409
-      case BankingError.BillPaymentInquiryExpired => 410
-      case BankingError.BillerSettlementFailed(_) => 502
-      case _                                       => 400
+      case BankingError.AccountNotFound(_)      => 404
+      case BankingError.InsufficientFunds(_, _) => 409
+      case LedgerError.DuplicateTransaction(_) |
+          LedgerError.TransactionAlreadyReversed(_) => 409
+      case LedgerError.TransactionNotFound(_) => 404
+      case _                                     => 400

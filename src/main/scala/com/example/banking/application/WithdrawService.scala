@@ -6,33 +6,40 @@ import java.util.UUID
 import com.example.banking.domain.{
   Account,
   AccountId,
-  BankingError,
   Money,
   WithdrawalCompleted,
   WithdrawalId
 }
-import com.example.banking.ports.{AccountRepository, MessageBus}
+import com.example.banking.ports.{AccountOperations, MessageBus}
+import com.example.domain.DomainError
 
 final case class WithdrawalResult(account: Account, event: WithdrawalCompleted)
 
 final class WithdrawService(
-    accountRepository: AccountRepository,
+    accountOperations: AccountOperations,
     messageBus: MessageBus,
     clock: Clock,
     generateWithdrawalId: () => UUID
 ):
-  def withdraw(rawAccountId: String, amount: BigDecimal): Either[BankingError, WithdrawalResult] =
+  def withdraw(rawAccountId: String, amount: BigDecimal): Either[DomainError, WithdrawalResult] =
     for
       accountId <- AccountId.from(rawAccountId)
       withdrawalAmount <- Money.positiveWithdrawal(amount)
-      account <- accountRepository.withdraw(accountId, withdrawalAmount)
+      withdrawalId = WithdrawalId(generateWithdrawalId())
+      occurredAt = Instant.now(clock)
+      account <- accountOperations.withdraw(
+        withdrawalId.value,
+        accountId,
+        withdrawalAmount,
+        occurredAt
+      )
     yield
       val event = WithdrawalCompleted(
-        withdrawalId = WithdrawalId(generateWithdrawalId()),
+        withdrawalId = withdrawalId,
         accountId = account.id,
         amount = withdrawalAmount,
         resultingBalance = account.balance,
-        occurredAt = Instant.now(clock)
+        occurredAt = occurredAt
       )
       messageBus.publish(event)
       WithdrawalResult(account, event)

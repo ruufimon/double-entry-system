@@ -1,18 +1,18 @@
-package com.example.banking.infrastructure
+package com.example.billpayment.infrastructure
 
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
-import com.example.banking.domain.{
-  BankingError,
+import com.example.billpayment.domain.{
   BillerCode,
   BillerDebt,
   BillerReceipt,
   BillerReference,
-  BillPaymentId,
-  Money
+  BillPaymentAmount,
+  BillPaymentError,
+  BillPaymentId
 }
-import com.example.banking.ports.BillerGateway
+import com.example.billpayment.ports.BillerGateway
 
 final case class BillSeed(
     billerCode: String,
@@ -45,16 +45,16 @@ final class InMemoryBillerGateway(initialBills: Vector[BillSeed]) extends Biller
       billerCode: BillerCode,
       referenceCode1: BillerReference,
       referenceCode2: BillerReference
-  ): Either[BankingError, BillerDebt] =
+  ): Either[BillPaymentError, BillerDebt] =
     if !supportedBillers.contains(billerCode.value) then
-      Left(BankingError.BillerNotFound(billerCode.value))
+      Left(BillPaymentError.BillerNotFound(billerCode.value))
     else
       val billKey = BillKey(billerCode.value, referenceCode1.value, referenceCode2.value)
       Option(bills.get(billKey)) match
-        case None => Left(BankingError.BillNotFound)
-        case Some(billState) if billState.paid => Left(BankingError.BillNotPayable)
+        case None => Left(BillPaymentError.BillNotFound)
+        case Some(billState) if billState.paid => Left(BillPaymentError.BillNotPayable)
         case Some(billState) =>
-          Money.positiveBillPayment(billState.debt).map { amount =>
+          BillPaymentAmount.from(billState.debt).map { amount =>
             BillerDebt(billerCode, referenceCode1, referenceCode2, amount)
           }
 
@@ -62,7 +62,7 @@ final class InMemoryBillerGateway(initialBills: Vector[BillSeed]) extends Biller
       debt: BillerDebt,
       paymentId: BillPaymentId,
       paidAt: Instant
-  ): Either[BankingError, BillerReceipt] =
+  ): Either[BillPaymentError, BillerReceipt] =
     bills.synchronized {
       Option(receipts.get(paymentId)) match
         case Some(receipt) => Right(receipt)
@@ -73,10 +73,10 @@ final class InMemoryBillerGateway(initialBills: Vector[BillSeed]) extends Biller
             debt.referenceCode2.value
           )
           Option(bills.get(billKey)) match
-            case None => Left(BankingError.BillNotFound)
-            case Some(billState) if billState.paid => Left(BankingError.BillNotPayable)
+            case None => Left(BillPaymentError.BillNotFound)
+            case Some(billState) if billState.paid => Left(BillPaymentError.BillNotPayable)
             case Some(billState) if billState.debt != debt.amount.amount =>
-              Left(BankingError.BillerSettlementFailed("Biller debt changed before settlement"))
+              Left(BillPaymentError.SettlementFailed("Biller debt changed before settlement"))
             case Some(billState) =>
               val receipt = BillerReceipt(
                 s"${debt.billerCode.value}-${paymentId.value}",

@@ -1,7 +1,7 @@
 package com.example.banking.ports
 
-import com.example.banking.domain.DomainEvent
+import com.example.messaging.InternalMessage
 
 trait MessageBus:
-  def publish(event: DomainEvent): Unit
-  def subscribe(handler: DomainEvent => Unit): Unit
+  def publish(message: InternalMessage): Unit
+  def subscribe(handler: InternalMessage => Unit): Unit

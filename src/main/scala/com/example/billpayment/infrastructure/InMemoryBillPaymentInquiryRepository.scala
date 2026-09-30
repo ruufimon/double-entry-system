@@ -1,16 +1,18 @@
-package com.example.banking.infrastructure
+package com.example.billpayment.infrastructure
 
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 import com.example.banking.domain.{
-  AccountId,
-  BankingError,
+  AccountId
+}
+import com.example.billpayment.domain.{
+  BillPaymentError,
   BillPaymentInquiry,
   BillPaymentInquiryId,
   BillPaymentInquiryStatus
 }
-import com.example.banking.ports.BillPaymentInquiryRepository
+import com.example.billpayment.ports.BillPaymentInquiryRepository
 
 final class InMemoryBillPaymentInquiryRepository extends BillPaymentInquiryRepository:
   private val inquiries = new ConcurrentHashMap[BillPaymentInquiryId, BillPaymentInquiry]()
@@ -22,18 +24,18 @@ final class InMemoryBillPaymentInquiryRepository extends BillPaymentInquiryRepos
       inquiryId: BillPaymentInquiryId,
       accountId: AccountId,
       currentTime: Instant
-  ): Either[BankingError, BillPaymentInquiry] =
+  ): Either[BillPaymentError, BillPaymentInquiry] =
     inquiries.synchronized {
       Option(inquiries.get(inquiryId)) match
-        case None => Left(BankingError.BillPaymentInquiryNotFound)
+        case None => Left(BillPaymentError.InquiryNotFound)
         case Some(inquiry) if inquiry.accountId != accountId =>
-          Left(BankingError.BillPaymentInquiryNotFound)
+          Left(BillPaymentError.InquiryNotFound)
         case Some(inquiry) if inquiry.status == BillPaymentInquiryStatus.Completed =>
-          Left(BankingError.BillPaymentAlreadyCompleted)
+          Left(BillPaymentError.AlreadyCompleted)
         case Some(inquiry) if inquiry.status == BillPaymentInquiryStatus.Processing =>
-          Left(BankingError.BillPaymentInProgress)
+          Left(BillPaymentError.InProgress)
         case Some(inquiry) if !currentTime.isBefore(inquiry.expiresAt) =>
-          Left(BankingError.BillPaymentInquiryExpired)
+          Left(BillPaymentError.InquiryExpired)
         case Some(inquiry) =>
           val claimedInquiry = inquiry.copy(status = BillPaymentInquiryStatus.Processing)
           inquiries.put(inquiryId, claimedInquiry)

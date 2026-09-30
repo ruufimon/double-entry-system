@@ -1,13 +1,13 @@
-package com.example.banking.ports
+package com.example.billpayment.ports
 
 import java.time.Instant
 
-import com.example.banking.domain.{
-  BankingError,
+import com.example.billpayment.domain.{
   BillerCode,
   BillerDebt,
   BillerReceipt,
   BillerReference,
+  BillPaymentError,
   BillPaymentId
 }
 
@@ -16,10 +16,10 @@ trait BillerGateway:
       billerCode: BillerCode,
       referenceCode1: BillerReference,
       referenceCode2: BillerReference
-  ): Either[BankingError, BillerDebt]
+  ): Either[BillPaymentError, BillerDebt]
 
   def settle(
       debt: BillerDebt,
       paymentId: BillPaymentId,
       paidAt: Instant
-  ): Either[BankingError, BillerReceipt]
+  ): Either[BillPaymentError, BillerReceipt]

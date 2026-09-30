@@ -2,7 +2,12 @@ package com.example.banking.application
 
 import java.util.concurrent.atomic.AtomicBoolean
 
-import com.example.banking.domain.{AuditLogEntry, DepositCompleted, WithdrawalCompleted}
+import com.example.banking.domain.{
+  AuditLogEntry,
+  BillPaymentCompleted,
+  DepositCompleted,
+  WithdrawalCompleted
+}
 import com.example.banking.ports.{AuditLogRepository, MessageBus}
 
 final class AuditLogService(
@@ -16,4 +21,5 @@ final class AuditLogService(
       messageBus.subscribe {
         case event: DepositCompleted => auditLogRepository.append(AuditLogEntry.from(event))
         case event: WithdrawalCompleted => auditLogRepository.append(AuditLogEntry.from(event))
+        case event: BillPaymentCompleted => auditLogRepository.append(AuditLogEntry.from(event))
       }

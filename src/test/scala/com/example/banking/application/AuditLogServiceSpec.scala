@@ -5,8 +5,11 @@ import java.util.UUID
 
 import com.example.banking.domain.AuditLogEntry
 import com.example.banking.infrastructure.{
+  BillSeed,
   InMemoryAccountRepository,
   InMemoryAuditLogRepository,
+  InMemoryBillerGateway,
+  InMemoryBillPaymentInquiryRepository,
   LocalMessageBus
 }
 import org.scalatest.funsuite.AnyFunSuite
@@ -79,4 +82,50 @@ final class AuditLogServiceSpec extends AnyFunSuite with Matchers:
       case Right(result) =>
         auditLogRepository.entries.last shouldBe AuditLogEntry.from(result.event)
       case Left(error) => fail(s"Expected a completed withdrawal, got ${error.code}")
+  }
+
+  test("completed bill payment creates a bill payment audit log entry") {
+    val occurredAt = Instant.parse("2026-09-30T02:00:00Z")
+    val messageBus = new LocalMessageBus()
+    val accountRepository = new InMemoryAccountRepository()
+    val auditLogRepository = new InMemoryAuditLogRepository()
+    val auditLogService = new AuditLogService(messageBus, auditLogRepository)
+    val depositService = new DepositService(
+      accountRepository,
+      messageBus,
+      Clock.fixed(occurredAt, ZoneOffset.UTC),
+      () => UUID.randomUUID()
+    )
+    val billPaymentService = new BillPaymentService(
+      accountRepository,
+      new InMemoryBillerGateway(
+        Vector(
+          BillSeed("demo-biller", "customer-001", "invoice-001", BigDecimal("100.00"))
+        )
+      ),
+      new InMemoryBillPaymentInquiryRepository(),
+      messageBus,
+      Clock.fixed(occurredAt, ZoneOffset.UTC),
+      () => UUID.randomUUID(),
+      () => UUID.randomUUID()
+    )
+    auditLogService.subscribe()
+    depositService.deposit("account-123", BigDecimal("150.00"))
+    val inquiryResult = billPaymentService.inquire(
+      "account-123",
+      "demo-biller",
+      "customer-001",
+      "invoice-001"
+    )
+
+    inquiryResult match
+      case Right(inquiry) =>
+        billPaymentService.confirm(
+          "account-123",
+          inquiry.inquiry.inquiryId.value.toString
+        ) match
+          case Right(result) =>
+            auditLogRepository.entries.last shouldBe AuditLogEntry.from(result.event)
+          case Left(error) => fail(s"Expected a completed bill payment, got ${error.code}")
+      case Left(error) => fail(s"Expected a bill inquiry, got ${error.code}")
   }

@@ -3,11 +3,19 @@ package com.example
 import java.time.Clock
 import java.util.UUID
 
-import com.example.banking.application.{AuditLogService, DepositService, WithdrawService}
+import com.example.banking.application.{
+  AuditLogService,
+  BillPaymentService,
+  DepositService,
+  WithdrawService
+}
 import com.example.banking.http.BankingServlet
 import com.example.banking.infrastructure.{
   InMemoryAccountRepository,
   InMemoryAuditLogRepository,
+  InMemoryBillerGateway,
+  InMemoryBillPaymentInquiryRepository,
+  BillSeed,
   LocalMessageBus
 }
 import org.eclipse.jetty.ee11.servlet.{ServletContextHandler, ServletHolder}
@@ -20,6 +28,10 @@ object Server:
     val context = new ServletContextHandler()
     val accountRepository = new InMemoryAccountRepository()
     val auditLogRepository = new InMemoryAuditLogRepository()
+    val inquiryRepository = new InMemoryBillPaymentInquiryRepository()
+    val billerGateway = new InMemoryBillerGateway(
+      Vector(BillSeed("demo-biller", "customer-001", "invoice-001", BigDecimal("100.00")))
+    )
     val messageBus = new LocalMessageBus()
     val auditLogService = new AuditLogService(messageBus, auditLogRepository)
     val depositService = new DepositService(
@@ -34,12 +46,23 @@ object Server:
       Clock.systemUTC(),
       () => UUID.randomUUID()
     )
+    val billPaymentService = new BillPaymentService(
+      accountRepository,
+      billerGateway,
+      inquiryRepository,
+      messageBus,
+      Clock.systemUTC(),
+      () => UUID.randomUUID(),
+      () => UUID.randomUUID()
+    )
     auditLogService.subscribe()
 
     context.setContextPath("/")
     context.addServlet(new ServletHolder(new PingServlet()), "/*")
     context.addServlet(
-      new ServletHolder(new BankingServlet(depositService, withdrawService)),
+      new ServletHolder(
+        new BankingServlet(depositService, withdrawService, billPaymentService)
+      ),
       "/accounts/*"
     )
     server.setHandler(context)

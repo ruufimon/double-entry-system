@@ -8,6 +8,11 @@ import com.example.banking.ports.AccountRepository
 final class InMemoryAccountRepository extends AccountRepository:
   private val balances = new ConcurrentHashMap[AccountId, BigDecimal]()
 
+  override def find(accountId: AccountId): Either[BankingError, Account] =
+    Option(balances.get(accountId))
+      .map(balance => Account(accountId, balance))
+      .toRight(BankingError.AccountNotFound(accountId.value))
+
   override def deposit(accountId: AccountId, amount: Money): Either[BankingError, Account] =
     balances.synchronized {
       val currentBalance = Option(balances.get(accountId)).getOrElse(BigDecimal(0))
@@ -26,4 +31,10 @@ final class InMemoryAccountRepository extends AccountRepository:
           val updatedBalance = currentBalance - amount.amount
           balances.put(accountId, updatedBalance)
           Right(Account(accountId, updatedBalance))
+    }
+
+  override def refund(accountId: AccountId, amount: Money): Unit =
+    balances.synchronized {
+      val currentBalance = Option(balances.get(accountId)).getOrElse(BigDecimal(0))
+      balances.put(accountId, currentBalance + amount.amount)
     }

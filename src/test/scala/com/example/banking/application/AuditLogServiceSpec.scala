@@ -4,7 +4,11 @@ import java.time.{Clock, Duration, Instant, ZoneOffset}
 import java.util.UUID
 
 import com.example.banking.domain.{AccountId, AuditLogEntry, BankingOperation, Money}
-import com.example.banking.infrastructure.{InMemoryAuditLogRepository, LocalMessageBus}
+import com.example.banking.infrastructure.{
+  InMemoryAccountRepository,
+  InMemoryAuditLogRepository,
+  LocalMessageBus
+}
 import com.example.banking.ledger.LedgerBackedAccountOperations
 import com.example.banking.ledger.infrastructure.InMemoryLedgerRepository
 import com.example.billpayment.domain.{
@@ -25,7 +29,7 @@ final class AuditLogServiceSpec extends AnyFunSuite with Matchers:
     val auditLogRepository = new InMemoryAuditLogRepository()
     val auditLogService = new AuditLogService(messageBus, auditLogRepository)
     val depositService = new DepositService(
-      new LedgerBackedAccountOperations(new InMemoryLedgerRepository()),
+      createAccountOperations(),
       messageBus,
       Clock.fixed(occurredAt, ZoneOffset.UTC),
       () => depositId
@@ -46,7 +50,7 @@ final class AuditLogServiceSpec extends AnyFunSuite with Matchers:
     val auditLogRepository = new InMemoryAuditLogRepository()
     val auditLogService = new AuditLogService(messageBus, auditLogRepository)
     val depositService = new DepositService(
-      new LedgerBackedAccountOperations(new InMemoryLedgerRepository()),
+      createAccountOperations(),
       messageBus,
       Clock.systemUTC(),
       () => UUID.randomUUID()
@@ -62,7 +66,7 @@ final class AuditLogServiceSpec extends AnyFunSuite with Matchers:
 
   test("completed withdrawal creates a withdrawal audit log entry") {
     val messageBus = new LocalMessageBus()
-    val accountOperations = new LedgerBackedAccountOperations(new InMemoryLedgerRepository())
+    val accountOperations = createAccountOperations()
     val auditLogRepository = new InMemoryAuditLogRepository()
     val auditLogService = new AuditLogService(messageBus, auditLogRepository)
     val depositService = new DepositService(
@@ -122,3 +126,11 @@ final class AuditLogServiceSpec extends AnyFunSuite with Matchers:
       case Right(value) => value
       case Left(error: DomainError) => fail(s"Expected Right, got ${error.code}: ${error.message}")
       case Left(error) => fail(s"Expected Right, got $error")
+
+  private def createAccountOperations(): LedgerBackedAccountOperations =
+    val accountOperations = new LedgerBackedAccountOperations(
+      new InMemoryLedgerRepository(),
+      new InMemoryAccountRepository()
+    )
+    requireRight(accountOperations.open(requireRight(AccountId.from("account-123"))))
+    accountOperations

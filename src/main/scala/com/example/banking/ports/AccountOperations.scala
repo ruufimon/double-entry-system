@@ -3,10 +3,12 @@ package com.example.banking.ports
 import java.time.Instant
 import java.util.UUID
 
-import com.example.banking.domain.{Account, AccountActivity, AccountId, Money}
+import com.example.banking.domain.{Account, AccountActivity, AccountId, AccountOpening, Money}
 import com.example.domain.DomainError
 
 trait AccountOperations:
+  def open(accountId: AccountId): Either[DomainError, AccountOpening]
+
   def find(accountId: AccountId): Either[DomainError, Account]
 
   def deposit(

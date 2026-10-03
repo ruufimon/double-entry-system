@@ -5,7 +5,8 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
 import com.example.banking.application.{AccountMessageHandler, DepositService}
-import com.example.banking.infrastructure.LocalMessageBus
+import com.example.banking.domain.AccountId
+import com.example.banking.infrastructure.{InMemoryAccountRepository, LocalMessageBus}
 import com.example.banking.ledger.LedgerBackedAccountOperations
 import com.example.banking.ledger.infrastructure.InMemoryLedgerRepository
 import com.example.billpayment.application.{BillPaymentProcessManager, BillPaymentService}
@@ -24,7 +25,10 @@ import org.scalatra.test.scalatest.ScalatraFunSuite
 final class BillPaymentRoutesSpec extends ScalatraFunSuite:
   private implicit val testJsonFormats: Formats = DefaultFormats
   private val ledgerRepository = new InMemoryLedgerRepository()
-  private val accountOperations = new LedgerBackedAccountOperations(ledgerRepository)
+  private val accountOperations = new LedgerBackedAccountOperations(
+    ledgerRepository,
+    new InMemoryAccountRepository()
+  )
   private val messageBus = new LocalMessageBus()
   private val depositService = new DepositService(
     accountOperations,
@@ -63,6 +67,7 @@ final class BillPaymentRoutesSpec extends ScalatraFunSuite:
   test("inquiry and confirmation complete the quoted debt") {
     val inquiryId = new AtomicReference[String]()
     val paymentId = new AtomicReference[String]()
+    openAccount("bill-account")
     depositService.deposit("bill-account", BigDecimal("150.00"))
 
     postJson(
@@ -97,6 +102,7 @@ final class BillPaymentRoutesSpec extends ScalatraFunSuite:
   }
 
   test("inquiry rejects unknown bill references") {
+    openAccount("reference-account")
     depositService.deposit("reference-account", BigDecimal("100.00"))
 
     postJson(
@@ -143,6 +149,10 @@ final class BillPaymentRoutesSpec extends ScalatraFunSuite:
 
   private def postJson(path: String, jsonBody: String)(assertions: => Unit): Unit =
     post(path, jsonBody, Map("Content-Type" -> "application/json"))(assertions)
+
+  private def openAccount(rawAccountId: String): Unit =
+    val accountId = AccountId.from(rawAccountId).getOrElse(fail("Expected valid account ID"))
+    accountOperations.open(accountId).isRight shouldBe true
 
 private final class TestBillPaymentServlet(
     protected val billPaymentService: BillPaymentService

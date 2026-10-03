@@ -4,8 +4,8 @@ import java.time.{Clock, Duration, Instant, ZoneOffset}
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
-import com.example.banking.domain.{BankingError, DomainEvent, WithdrawalCompleted}
-import com.example.banking.infrastructure.LocalMessageBus
+import com.example.banking.domain.{AccountId, BankingError, DomainEvent, WithdrawalCompleted}
+import com.example.banking.infrastructure.{InMemoryAccountRepository, LocalMessageBus}
 import com.example.banking.ledger.LedgerBackedAccountOperations
 import com.example.banking.ledger.infrastructure.InMemoryLedgerRepository
 import org.scalatest.funsuite.AnyFunSuite
@@ -15,7 +15,11 @@ final class WithdrawServiceSpec extends AnyFunSuite with Matchers:
   test("withdraw deducts funds and publishes WithdrawalCompleted") {
     val occurredAt = Instant.parse("2026-09-29T11:30:00Z")
     val withdrawalId = UUID.fromString("9f7c7448-119f-4a58-b988-14a2992c78b3")
-    val accountOperations = new LedgerBackedAccountOperations(new InMemoryLedgerRepository())
+    val accountOperations = new LedgerBackedAccountOperations(
+      new InMemoryLedgerRepository(),
+      new InMemoryAccountRepository()
+    )
+    accountOperations.open(AccountId.from("account-123").getOrElse(fail("valid account ID")))
     val messageBus = new LocalMessageBus()
     val publishedEvent = new AtomicReference[Option[DomainEvent]](None)
     messageBus.subscribe {
@@ -49,7 +53,11 @@ final class WithdrawServiceSpec extends AnyFunSuite with Matchers:
   }
 
   test("insufficient funds does not publish WithdrawalCompleted") {
-    val accountOperations = new LedgerBackedAccountOperations(new InMemoryLedgerRepository())
+    val accountOperations = new LedgerBackedAccountOperations(
+      new InMemoryLedgerRepository(),
+      new InMemoryAccountRepository()
+    )
+    accountOperations.open(AccountId.from("account-123").getOrElse(fail("valid account ID")))
     val messageBus = new LocalMessageBus()
     val withdrawalEvents = new AtomicReference(Vector.empty[WithdrawalCompleted])
     messageBus.subscribe {

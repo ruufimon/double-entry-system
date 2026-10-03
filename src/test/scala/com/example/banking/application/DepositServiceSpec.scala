@@ -4,8 +4,8 @@ import java.time.{Clock, Duration, Instant, ZoneOffset}
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
-import com.example.banking.domain.DomainEvent
-import com.example.banking.infrastructure.LocalMessageBus
+import com.example.banking.domain.{AccountId, DomainEvent}
+import com.example.banking.infrastructure.{InMemoryAccountRepository, LocalMessageBus}
 import com.example.banking.ledger.LedgerBackedAccountOperations
 import com.example.banking.ledger.infrastructure.InMemoryLedgerRepository
 import org.scalatest.funsuite.AnyFunSuite
@@ -21,8 +21,13 @@ final class DepositServiceSpec extends AnyFunSuite with Matchers:
       case event: DomainEvent => publishedEvent.set(Some(event))
       case _                  => ()
     }
+    val accountOperations = new LedgerBackedAccountOperations(
+      new InMemoryLedgerRepository(),
+      new InMemoryAccountRepository()
+    )
+    accountOperations.open(AccountId.from("account-123").getOrElse(fail("valid account ID")))
     val depositService = new DepositService(
-      new LedgerBackedAccountOperations(new InMemoryLedgerRepository()),
+      accountOperations,
       messageBus,
       Clock.fixed(occurredAt, ZoneOffset.UTC),
       () => depositId
@@ -50,7 +55,10 @@ final class DepositServiceSpec extends AnyFunSuite with Matchers:
       case _                  => ()
     }
     val depositService = new DepositService(
-      new LedgerBackedAccountOperations(new InMemoryLedgerRepository()),
+      new LedgerBackedAccountOperations(
+        new InMemoryLedgerRepository(),
+        new InMemoryAccountRepository()
+      ),
       messageBus,
       Clock.systemUTC(),
       () => UUID.randomUUID()

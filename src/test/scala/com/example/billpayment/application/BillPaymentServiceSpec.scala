@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReferenc
 
 import com.example.banking.application.{AccountMessageHandler, DepositService}
 import com.example.banking.domain.{AccountActivityStatus, AccountId}
-import com.example.banking.infrastructure.LocalMessageBus
+import com.example.banking.infrastructure.{InMemoryAccountRepository, LocalMessageBus}
 import com.example.banking.ledger.LedgerBackedAccountOperations
 import com.example.banking.ledger.infrastructure.InMemoryLedgerRepository
 import com.example.billpayment.domain.*
@@ -216,7 +216,10 @@ final class BillPaymentServiceSpec extends AnyFunSuite with Matchers:
       billerGateway: BillerGateway = createBillerGateway()
   ): Fixture =
     val ledgerRepository = new InMemoryLedgerRepository()
-    val accountOperations = new LedgerBackedAccountOperations(ledgerRepository)
+    val accountOperations = new LedgerBackedAccountOperations(
+      ledgerRepository,
+      new InMemoryAccountRepository()
+    )
     val messageBus = new LocalMessageBus()
     val clock = new MutableClock(StartTime)
     val inquiryRepository = new InMemoryBillPaymentInquiryRepository()
@@ -256,6 +259,7 @@ final class BillPaymentServiceSpec extends AnyFunSuite with Matchers:
     )
 
   private def fund(fixture: Fixture, amount: BigDecimal): Unit =
+    requireRight(fixture.accountOperations.open(requireRight(AccountId.from(Account))))
     requireRight(fixture.depositService.deposit(Account, amount))
 
   private def inquire(fixture: Fixture): BillPaymentInquiry =

@@ -10,11 +10,9 @@ import com.example.domain.DomainError
 final class InMemoryLedgerRepository extends LedgerRepository:
   private var journal = Vector.empty[LedgerTransaction]
 
-  override def findAccount(accountId: AccountId): Either[DomainError, Account] =
-    synchronized {
-      if hasAccount(accountId) then Right(Account(accountId, balanceOf(accountId)))
-      else Left(BankingError.AccountNotFound(accountId.value))
-    }
+  override def balance(accountId: AccountId): BigDecimal = synchronized {
+    balanceOf(accountId)
+  }
 
   override def post(transaction: LedgerTransaction): Either[DomainError, Account] =
     synchronized {
@@ -43,34 +41,31 @@ final class InMemoryLedgerRepository extends LedgerRepository:
 
   override def activities(
       accountId: AccountId
-  ): Either[DomainError, Vector[AccountActivity]] =
+  ): Vector[AccountActivity] =
     synchronized {
-      if !hasAccount(accountId) then Left(BankingError.AccountNotFound(accountId.value))
-      else
-        val reversedTransactionIds = journal.flatMap(_.reversesTransactionId).toSet
-        var runningBalance = BigDecimal(0)
-        val accountActivities = journal.flatMap { transaction =>
-          customerEntry(transaction, accountId).map { entry =>
-            runningBalance = applyEntry(runningBalance, entry)
-            AccountActivity(
-              transactionId = transaction.transactionId,
-              operation = transaction.operation,
-              effect = entry.direction match
-                case LedgerDirection.Credit => BalanceEffect.Increase
-                case LedgerDirection.Debit  => BalanceEffect.Decrease,
-              amount = entry.amount.amount,
-              currency = entry.currency,
-              balanceAfter = runningBalance,
-              occurredAt = transaction.occurredAt,
-              status =
-                if reversedTransactionIds.contains(transaction.transactionId) then
-                  AccountActivityStatus.Reversed
-                else AccountActivityStatus.Posted,
-              originalTransactionId = transaction.reversesTransactionId
-            )
-          }
+      val reversedTransactionIds = journal.flatMap(_.reversesTransactionId).toSet
+      var runningBalance = BigDecimal(0)
+      journal.flatMap { transaction =>
+        customerEntry(transaction, accountId).map { entry =>
+          runningBalance = applyEntry(runningBalance, entry)
+          AccountActivity(
+            transactionId = transaction.transactionId,
+            operation = transaction.operation,
+            effect = entry.direction match
+              case LedgerDirection.Credit => BalanceEffect.Increase
+              case LedgerDirection.Debit  => BalanceEffect.Decrease,
+            amount = entry.amount.amount,
+            currency = entry.currency,
+            balanceAfter = runningBalance,
+            occurredAt = transaction.occurredAt,
+            status =
+              if reversedTransactionIds.contains(transaction.transactionId) then
+                AccountActivityStatus.Reversed
+              else AccountActivityStatus.Posted,
+            originalTransactionId = transaction.reversesTransactionId
+          )
         }
-        Right(accountActivities)
+      }
     }
 
   def transactions: Vector[LedgerTransaction] = synchronized(journal)
@@ -86,8 +81,6 @@ final class InMemoryLedgerRepository extends LedgerRepository:
       val currentBalance = balanceOf(accountId)
 
       customerLedgerEntry.direction match
-        case LedgerDirection.Debit if !hasAccount(accountId) =>
-          Left(BankingError.AccountNotFound(accountId.value))
         case LedgerDirection.Debit if currentBalance < customerLedgerEntry.amount.amount =>
           Left(
             BankingError.InsufficientFunds(
@@ -98,9 +91,6 @@ final class InMemoryLedgerRepository extends LedgerRepository:
         case _ =>
           journal = journal :+ transaction
           Right(Account(accountId, applyEntry(currentBalance, customerLedgerEntry)))
-
-  private def hasAccount(accountId: AccountId): Boolean =
-    journal.exists(transaction => customerEntry(transaction, accountId).nonEmpty)
 
   private def balanceOf(accountId: AccountId): BigDecimal =
     journal.foldLeft(BigDecimal(0)) { (balance, transaction) =>

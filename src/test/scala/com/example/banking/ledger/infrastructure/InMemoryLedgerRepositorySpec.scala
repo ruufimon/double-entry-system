@@ -8,6 +8,7 @@ import scala.concurrent.duration.*
 import scala.concurrent.{Await, ExecutionContext, Future}
 
 import com.example.banking.domain.*
+import com.example.banking.infrastructure.InMemoryAccountRepository
 import com.example.banking.ledger.*
 import com.example.domain.DomainError
 import org.scalatest.funsuite.AnyFunSuite
@@ -145,7 +146,12 @@ final class InMemoryLedgerRepositorySpec extends AnyFunSuite with Matchers:
 
   private def createLedger(): (InMemoryLedgerRepository, LedgerBackedAccountOperations) =
     val repository = new InMemoryLedgerRepository()
-    repository -> new LedgerBackedAccountOperations(repository)
+    val operations = new LedgerBackedAccountOperations(
+      repository,
+      new InMemoryAccountRepository()
+    )
+    requireRight(operations.open(Account))
+    repository -> operations
 
   private def requireRight[A](result: Either[?, A]): A =
     result match

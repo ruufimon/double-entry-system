@@ -5,12 +5,14 @@ import java.util.UUID
 
 import com.example.banking.application.{
   AccountMessageHandler,
+  AccountService,
   AuditLogService,
   DepositService,
   WithdrawService
 }
 import com.example.banking.http.BankingServlet
 import com.example.banking.infrastructure.{
+  InMemoryAccountRepository,
   InMemoryAuditLogRepository,
   LocalMessageBus
 }
@@ -32,7 +34,12 @@ object Server:
     val server = new JettyServer(port)
     val context = new ServletContextHandler()
     val ledgerRepository = new InMemoryLedgerRepository()
-    val accountOperations = new LedgerBackedAccountOperations(ledgerRepository)
+    val accountRepository = new InMemoryAccountRepository()
+    val accountOperations = new LedgerBackedAccountOperations(
+      ledgerRepository,
+      accountRepository
+    )
+    val accountService = new AccountService(accountOperations)
     val auditLogRepository = new InMemoryAuditLogRepository()
     val inquiryRepository = new InMemoryBillPaymentInquiryRepository()
     val processRepository = new InMemoryBillPaymentProcessRepository()
@@ -83,6 +90,7 @@ object Server:
     context.addServlet(
       new ServletHolder(
         new BankingServlet(
+          accountService,
           depositService,
           withdrawService,
           billPaymentService,

@@ -2,14 +2,15 @@ package com.example.banking.http
 
 import scala.util.control.NonFatal
 
-import com.example.banking.application.{DepositService, WithdrawService}
+import com.example.banking.application.{AccountService, DepositService, WithdrawService}
 import com.example.banking.domain.{
   AccountActivity,
   AccountActivityStatus,
   AccountId,
   BalanceEffect,
   BankingError,
-  BankingOperation
+  BankingOperation,
+  Currency
 }
 import com.example.banking.ledger.LedgerError
 import com.example.banking.ports.AccountOperations
@@ -21,6 +22,12 @@ import org.scalatra.ScalatraServlet
 import org.scalatra.json.JacksonJsonSupport
 
 final case class DepositRequest(amount: BigDecimal)
+final case class AccountResponse(
+    accountId: String,
+    currency: String,
+    balance: BigDecimal,
+    status: String
+)
 final case class DepositResponse(accountId: String, balance: BigDecimal)
 final case class WithdrawalRequest(amount: BigDecimal)
 final case class WithdrawalResponse(accountId: String, balance: BigDecimal)
@@ -39,6 +46,7 @@ final case class AccountActivityResponse(
 final case class ErrorResponse(error: String, message: String)
 
 final class BankingServlet(
+    accountService: AccountService,
     depositService: DepositService,
     withdrawService: WithdrawService,
     protected val billPaymentService: BillPaymentService,
@@ -52,6 +60,21 @@ final class BankingServlet(
 
   before() {
     contentType = formats("json")
+  }
+
+  put("/:accountId") {
+    accountService.open(params("accountId")) match
+      case Right(opening) =>
+        status = if opening.created then 201 else 200
+        AccountResponse(
+          accountId = opening.account.id.value,
+          currency = Currency.THB.code,
+          balance = opening.account.balance,
+          status = "active"
+        )
+      case Left(error) =>
+        status = errorStatus(error)
+        ErrorResponse(error.code, error.message)
   }
 
   post("/:accountId/deposits") {

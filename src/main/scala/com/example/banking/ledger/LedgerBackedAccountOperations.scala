@@ -4,14 +4,20 @@ import java.time.Instant
 import java.util.UUID
 
 import com.example.banking.domain.*
-import com.example.banking.ports.AccountOperations
+import com.example.banking.ports.{AccountOperations, AccountRepository}
 import com.example.domain.DomainError
 
 final class LedgerBackedAccountOperations(
-    ledgerRepository: LedgerRepository
+    ledgerRepository: LedgerRepository,
+    accountRepository: AccountRepository
 ) extends AccountOperations:
+  override def open(accountId: AccountId): Either[DomainError, AccountOpening] =
+    Right(accountRepository.open(accountId))
+
   override def find(accountId: AccountId): Either[DomainError, Account] =
-    ledgerRepository.findAccount(accountId)
+    accountRepository
+      .find(accountId)
+      .map(account => account.copy(balance = ledgerRepository.balance(accountId)))
 
   override def deposit(
       transactionId: UUID,
@@ -71,7 +77,7 @@ final class LedgerBackedAccountOperations(
   override def activities(
       accountId: AccountId
   ): Either[DomainError, Vector[AccountActivity]] =
-    ledgerRepository.activities(accountId)
+    accountRepository.find(accountId).map(_ => ledgerRepository.activities(accountId))
 
   private def post(
       transactionId: UUID,
@@ -86,8 +92,9 @@ final class LedgerBackedAccountOperations(
       case LedgerDirection.Debit  => LedgerDirection.Credit
       case LedgerDirection.Credit => LedgerDirection.Debit
 
-    LedgerTransaction
-      .create(
+    for
+      _ <- accountRepository.find(accountId)
+      transaction <- LedgerTransaction.create(
         transactionId,
         operation,
         Vector(
@@ -101,4 +108,5 @@ final class LedgerBackedAccountOperations(
         ),
         occurredAt
       )
-      .flatMap(ledgerRepository.post)
+      account <- ledgerRepository.post(transaction)
+    yield account

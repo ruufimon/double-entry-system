@@ -1,0 +1,39 @@
+# Builds the Scalatra banking API as a GraalVM native executable.
+#
+# Reflection and resource metadata for native-image lives in
+# src/main/resources/META-INF/native-image/. Regenerate it with the tracing
+# agent when routes, JSON models, or libraries change (see README).
+
+FROM ghcr.io/graalvm/native-image-community:25 AS build
+ARG SBT_VERSION=2.0.9
+RUN curl -fsSL "https://github.com/sbt/sbt/releases/download/v${SBT_VERSION}/sbt-${SBT_VERSION}.tgz" \
+      | tar -xz -C /opt
+ENV PATH="/opt/sbt/bin:${PATH}"
+WORKDIR /app
+
+# Resolve dependencies in their own layer so source changes rebuild faster.
+COPY build.sbt ./
+COPY project/build.properties project/plugins.sbt project/
+RUN sbt -batch update
+
+COPY src src
+RUN sbt -batch stage \
+ && cp -r target/out/jvm/scala-*/scalatra-ping-api/universal/stage /stage
+
+# --static-nolibc links everything except glibc statically (zlib included), so
+# the binary runs on distroless/base. -march=compatibility keeps it portable
+# across CPUs of the same architecture.
+RUN native-image \
+      --no-fallback \
+      --static-nolibc \
+      -march=compatibility \
+      -H:+ReportExceptionStackTraces \
+      -cp "/stage/lib/*" \
+      -o /banking-api \
+      com.example.Server
+
+FROM gcr.io/distroless/base-debian12:nonroot
+COPY --from=build /banking-api /app/banking-api
+ENV PORT=8080
+EXPOSE 8080
+ENTRYPOINT ["/app/banking-api"]

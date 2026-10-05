@@ -1,0 +1,1495 @@
+{
+  "reflection": [
+    {
+      "type": "boolean[]"
+    },
+    {
+      "type": "byte[]"
+    },
+    {
+      "type": "char[]"
+    },
+    {
+      "type": "com.example.PingServlet",
+      "fields": [
+        {
+          "name": "routes$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.domain.Account$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy3"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.domain.AccountActivity$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy12"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.domain.AccountActivityStatus$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy7"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.domain.AccountId$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.domain.AccountOpening$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy4"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.domain.AuditLogEntry$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy13"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.domain.BalanceEffect$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy6"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.domain.BankingError$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy14"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.domain.BankingOperation$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy11"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.domain.Currency$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy5"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.domain.DepositId$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy9"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.domain.Money$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy2"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.domain.WithdrawalId$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy10"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AccountActivityResponse",
+      "fields": [
+        {
+          "name": "amount"
+        },
+        {
+          "name": "balanceAfter"
+        },
+        {
+          "name": "currency"
+        },
+        {
+          "name": "effect"
+        },
+        {
+          "name": "occurredAt"
+        },
+        {
+          "name": "operation"
+        },
+        {
+          "name": "originalTransactionId"
+        },
+        {
+          "name": "status"
+        },
+        {
+          "name": "transactionId"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AccountActivityResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AccountBalanceResponse",
+      "fields": [
+        {
+          "name": "accountId"
+        },
+        {
+          "name": "balance"
+        },
+        {
+          "name": "currency"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AccountBalanceResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AccountResponse",
+      "fields": [
+        {
+          "name": "accountId"
+        },
+        {
+          "name": "balance"
+        },
+        {
+          "name": "currency"
+        },
+        {
+          "name": "status"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AccountResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.BankingServlet",
+      "fields": [
+        {
+          "name": "jsonFormats$lzy1"
+        },
+        {
+          "name": "org$json4s$jackson$JsonMethods$$_defaultMapper$lzy1"
+        },
+        {
+          "name": "routes$lzy1"
+        },
+        {
+          "name": "xmlRootNode$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.DepositRequest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "scala.math.BigDecimal"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.DepositRequest$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.DepositResponse",
+      "fields": [
+        {
+          "name": "accountId"
+        },
+        {
+          "name": "balance"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.DepositResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.ErrorResponse",
+      "fields": [
+        {
+          "name": "error"
+        },
+        {
+          "name": "message"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.ErrorResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.WithdrawalRequest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "scala.math.BigDecimal"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.WithdrawalRequest$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.WithdrawalResponse",
+      "fields": [
+        {
+          "name": "accountId"
+        },
+        {
+          "name": "balance"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.WithdrawalResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.ledger.LedgerAccount$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy2"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.ledger.LedgerDirection$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.ledger.LedgerEntry$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy3"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.ledger.LedgerTransaction$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy4"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.domain.BillPaymentError$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.domain.BillPaymentFailure$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy10"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.domain.BillPaymentId$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy2"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.domain.BillPaymentInquiry$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy12"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.domain.BillPaymentInquiryId$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy3"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.domain.BillPaymentInquiryStatus$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy8"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.domain.BillPaymentProcess$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy11"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.domain.BillPaymentStatus$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy9"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.domain.BillerCode$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy4"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.domain.BillerDebt$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy6"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.domain.BillerReceipt$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy7"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.domain.BillerReference$",
+      "fields": [
+        {
+          "name": "derived$CanEqual$lzy5"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.http.BillPaymentAcceptedResponse",
+      "fields": [
+        {
+          "name": "accountId"
+        },
+        {
+          "name": "inquiryId"
+        },
+        {
+          "name": "paymentId"
+        },
+        {
+          "name": "status"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.http.BillPaymentAcceptedResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.http.BillPaymentErrorResponse",
+      "fields": [
+        {
+          "name": "error"
+        },
+        {
+          "name": "message"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.http.BillPaymentErrorResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.http.BillPaymentFailureResponse",
+      "fields": [
+        {
+          "name": "error"
+        },
+        {
+          "name": "message"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.http.BillPaymentFailureResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.http.BillPaymentInquiryRequest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.http.BillPaymentInquiryRequest$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.http.BillPaymentInquiryResponse",
+      "fields": [
+        {
+          "name": "billerCode"
+        },
+        {
+          "name": "currentDebt"
+        },
+        {
+          "name": "expiresAt"
+        },
+        {
+          "name": "inquiryId"
+        },
+        {
+          "name": "referenceCode1"
+        },
+        {
+          "name": "referenceCode2"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.http.BillPaymentInquiryResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.http.BillPaymentStatusResponse",
+      "fields": [
+        {
+          "name": "accountId"
+        },
+        {
+          "name": "amount"
+        },
+        {
+          "name": "billerCode"
+        },
+        {
+          "name": "billerReceiptCode"
+        },
+        {
+          "name": "currency"
+        },
+        {
+          "name": "failure"
+        },
+        {
+          "name": "inquiryId"
+        },
+        {
+          "name": "paidAt"
+        },
+        {
+          "name": "paymentId"
+        },
+        {
+          "name": "resultingBalance"
+        },
+        {
+          "name": "status"
+        }
+      ]
+    },
+    {
+      "type": "com.example.billpayment.http.BillPaymentStatusResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.fasterxml.jackson.databind.deser.Deserializers[]"
+    },
+    {
+      "type": "com.fasterxml.jackson.databind.ext.Java7SupportImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.fasterxml.jackson.databind.ser.Serializers[]"
+    },
+    {
+      "type": "com.sun.management.GarbageCollectorMXBean"
+    },
+    {
+      "type": "com.sun.management.GcInfo"
+    },
+    {
+      "type": "com.sun.management.HotSpotDiagnosticMXBean",
+      "methods": [
+        {
+          "name": "getVMOption",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.sun.management.ThreadMXBean"
+    },
+    {
+      "type": "com.sun.management.UnixOperatingSystemMXBean"
+    },
+    {
+      "type": "com.sun.management.VMOption",
+      "methods": [
+        {
+          "name": "getName",
+          "parameterTypes": []
+        },
+        {
+          "name": "getOrigin",
+          "parameterTypes": []
+        },
+        {
+          "name": "getValue",
+          "parameterTypes": []
+        },
+        {
+          "name": "isWriteable",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.sun.management.VMOption$Origin",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "ATTACH_ON_DEMAND"
+        },
+        {
+          "name": "CONFIG_FILE"
+        },
+        {
+          "name": "DEFAULT"
+        },
+        {
+          "name": "ENVIRON_VAR"
+        },
+        {
+          "name": "ERGONOMIC"
+        },
+        {
+          "name": "MANAGEMENT"
+        },
+        {
+          "name": "OTHER"
+        },
+        {
+          "name": "VM_CREATION"
+        }
+      ]
+    },
+    {
+      "type": "com.sun.management.internal.DiagnosticCommandArgumentInfo",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "boolean",
+            "boolean",
+            "boolean",
+            "int"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.sun.management.internal.DiagnosticCommandArgumentInfo[]"
+    },
+    {
+      "type": "com.sun.management.internal.DiagnosticCommandInfo",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.String",
+            "java.lang.String",
+            "boolean",
+            "java.util.List"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.sun.management.internal.DiagnosticCommandInfo[]"
+    },
+    {
+      "type": "com.sun.management.internal.Flag",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String",
+            "java.lang.Object",
+            "boolean",
+            "boolean",
+            "com.sun.management.VMOption$Origin"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.sun.management.internal.GarbageCollectorExtImpl"
+    },
+    {
+      "type": "com.sun.management.internal.HotSpotDiagnostic"
+    },
+    {
+      "type": "com.sun.management.internal.HotSpotThreadImpl"
+    },
+    {
+      "type": "com.sun.management.internal.OperatingSystemImpl"
+    },
+    {
+      "type": "com.sun.management.internal.VirtualThreadSchedulerImpls$VirtualThreadSchedulerImpl"
+    },
+    {
+      "type": "double[]"
+    },
+    {
+      "type": "float[]"
+    },
+    {
+      "type": "int[]"
+    },
+    {
+      "type": "jakarta.servlet.http.Cookie[]"
+    },
+    {
+      "type": "java.lang.Boolean",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "TYPE"
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "boolean"
+          ]
+        },
+        {
+          "name": "getBoolean",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Byte",
+      "fields": [
+        {
+          "name": "TYPE"
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Character",
+      "fields": [
+        {
+          "name": "TYPE"
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Class",
+      "methods": [
+        {
+          "name": "isRecord",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.ClassValue"
+    },
+    {
+      "type": "java.lang.Class[]"
+    },
+    {
+      "type": "java.lang.Deprecated"
+    },
+    {
+      "type": "java.lang.Double",
+      "fields": [
+        {
+          "name": "TYPE"
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Float",
+      "fields": [
+        {
+          "name": "TYPE"
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Integer",
+      "fields": [
+        {
+          "name": "TYPE"
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Long",
+      "fields": [
+        {
+          "name": "TYPE"
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Object"
+    },
+    {
+      "type": "java.lang.Object[]"
+    },
+    {
+      "type": "java.lang.Object[][]"
+    },
+    {
+      "type": "java.lang.SecurityManager",
+      "methods": [
+        {
+          "name": "checkPermission",
+          "parameterTypes": [
+            "java.security.Permission"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Short",
+      "fields": [
+        {
+          "name": "TYPE"
+        }
+      ]
+    },
+    {
+      "type": "java.lang.StackTraceElement"
+    },
+    {
+      "type": "java.lang.String"
+    },
+    {
+      "type": "java.lang.String[]"
+    },
+    {
+      "type": "java.lang.System",
+      "methods": [
+        {
+          "name": "getSecurityManager",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Thread",
+      "methods": [
+        {
+          "name": "ofVirtual",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Thread$Builder",
+      "methods": [
+        {
+          "name": "factory",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Void",
+      "fields": [
+        {
+          "name": "TYPE"
+        }
+      ]
+    },
+    {
+      "type": "java.lang.invoke.VarHandle",
+      "methods": [
+        {
+          "name": "releaseFence",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.lang.management.BufferPoolMXBean"
+    },
+    {
+      "type": "java.lang.management.ClassLoadingMXBean"
+    },
+    {
+      "type": "java.lang.management.CompilationMXBean"
+    },
+    {
+      "type": "java.lang.management.LockInfo"
+    },
+    {
+      "type": "java.lang.management.MemoryMXBean"
+    },
+    {
+      "type": "java.lang.management.MemoryManagerMXBean"
+    },
+    {
+      "type": "java.lang.management.MemoryPoolMXBean"
+    },
+    {
+      "type": "java.lang.management.MemoryUsage"
+    },
+    {
+      "type": "java.lang.management.MonitorInfo"
+    },
+    {
+      "type": "java.lang.management.PlatformLoggingMXBean"
+    },
+    {
+      "type": "java.lang.management.RuntimeMXBean"
+    },
+    {
+      "type": "java.lang.management.ThreadInfo"
+    },
+    {
+      "type": "java.lang.reflect.Method[]"
+    },
+    {
+      "type": "java.math.BigDecimal"
+    },
+    {
+      "type": "java.math.BigInteger"
+    },
+    {
+      "type": "java.security.AccessController",
+      "methods": [
+        {
+          "name": "doPrivileged",
+          "parameterTypes": [
+            "java.security.PrivilegedAction"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.util.Arrays",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "asList",
+          "parameterTypes": [
+            "java.lang.Object[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.util.Date"
+    },
+    {
+      "type": "java.util.concurrent.Executors",
+      "methods": [
+        {
+          "name": "newThreadPerTaskExecutor",
+          "parameterTypes": [
+            "java.util.concurrent.ThreadFactory"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "javax.management.MBeanOperationInfo"
+    },
+    {
+      "type": "javax.management.MBeanServerBuilder",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "javax.management.ObjectName"
+    },
+    {
+      "type": "javax.management.StandardEmitterMBean"
+    },
+    {
+      "type": "javax.management.openmbean.CompositeData"
+    },
+    {
+      "type": "javax.management.openmbean.CompositeData[]"
+    },
+    {
+      "type": "javax.management.openmbean.OpenMBeanOperationInfoSupport"
+    },
+    {
+      "type": "javax.management.openmbean.TabularData"
+    },
+    {
+      "type": "javax.security.auth.Subject",
+      "methods": [
+        {
+          "name": "callAs",
+          "parameterTypes": [
+            "javax.security.auth.Subject",
+            "java.util.concurrent.Callable"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "jdk.management.VirtualThreadSchedulerMXBean"
+    },
+    {
+      "type": "jdk.management.jfr.ConfigurationInfo"
+    },
+    {
+      "type": "jdk.management.jfr.EventTypeInfo"
+    },
+    {
+      "type": "jdk.management.jfr.FlightRecorderMXBean"
+    },
+    {
+      "type": "jdk.management.jfr.FlightRecorderMXBeanImpl"
+    },
+    {
+      "type": "jdk.management.jfr.RecordingInfo"
+    },
+    {
+      "type": "jdk.management.jfr.SettingDescriptorInfo"
+    },
+    {
+      "type": "long[]"
+    },
+    {
+      "type": "org.eclipse.jetty.ee11.servlet.Holder$HolderConfig",
+      "methods": [
+        {
+          "name": "getInitParameter",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        },
+        {
+          "name": "getServletContext",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.eclipse.jetty.ee11.servlet.ServletHolder$Config"
+    },
+    {
+      "type": "org.eclipse.jetty.http.Http10FieldPreEncoder"
+    },
+    {
+      "type": "org.eclipse.jetty.http.Http11FieldPreEncoder"
+    },
+    {
+      "type": "org.eclipse.jetty.util.TypeUtil",
+      "methods": [
+        {
+          "name": "getClassLoaderLocation",
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
+        },
+        {
+          "name": "getCodeSourceLocation",
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
+        },
+        {
+          "name": "getModuleLocation",
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
+        },
+        {
+          "name": "getSystemClassLoaderLocation",
+          "parameterTypes": [
+            "java.lang.Class"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.eclipse.jetty.util.Utf8StringBuilder",
+      "methods": [
+        {
+          "name": "errorActionIgnore",
+          "parameterTypes": []
+        },
+        {
+          "name": "errorActionReplace",
+          "parameterTypes": []
+        },
+        {
+          "name": "errorActionReport",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.json4s.Extraction$",
+      "fields": [
+        {
+          "name": "typesHaveNaN$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "org.json4s.Extraction$ClassInstanceBuilder",
+      "fields": [
+        {
+          "name": "TypeHint$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "org.json4s.reflect.ConstructorParamDescriptor",
+      "fields": [
+        {
+          "name": "hasDefault$lzy1"
+        },
+        {
+          "name": "isOptional$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "org.json4s.reflect.Executable[]"
+    },
+    {
+      "type": "org.json4s.reflect.ScalaType",
+      "fields": [
+        {
+          "name": "fullName$lzy1"
+        },
+        {
+          "name": "simpleName$lzy1"
+        },
+        {
+          "name": "typeInfo$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "org.scalatra.Route",
+      "fields": [
+        {
+          "name": "isReversible$lzy1"
+        },
+        {
+          "name": "reversibleMatcher$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "org.scalatra.SinatraPathPatternParser",
+      "fields": [
+        {
+          "name": "$tilde$lzy1"
+        },
+        {
+          "name": "Error$lzy1"
+        },
+        {
+          "name": "Failure$lzy1"
+        },
+        {
+          "name": "NoSuccess$lzy1"
+        },
+        {
+          "name": "PartialPathPattern$lzy1"
+        },
+        {
+          "name": "Success$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "org.scalatra.SinatraRouteMatcher",
+      "fields": [
+        {
+          "name": "BuilderGeneratorParser$lzy1"
+        },
+        {
+          "name": "generator$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "org.scalatra.SweetCookies",
+      "fields": [
+        {
+          "name": "cookies$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "org.scalatra.servlet.RichRequest",
+      "fields": [
+        {
+          "name": "headers$lzy1"
+        },
+        {
+          "name": "parameters$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "org.scalatra.servlet.RichResponse",
+      "fields": [
+        {
+          "name": "headers$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "org.slf4j.simple.SimpleServiceProvider"
+    },
+    {
+      "type": "scala.Tuple2[]"
+    },
+    {
+      "type": "scala.reflect.Manifest[]"
+    },
+    {
+      "type": "scala.util.parsing.combinator.Parsers$$anon$5",
+      "fields": [
+        {
+          "name": "v0$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "scala.util.parsing.combinator.Parsers$NoSuccess$",
+      "fields": [
+        {
+          "name": "I$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "scala.util.parsing.input.OffsetPosition",
+      "fields": [
+        {
+          "name": "index$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "scala.util.parsing.input.OffsetPosition$",
+      "fields": [
+        {
+          "name": "scala$util$parsing$input$PositionCache$$indexCacheTL$lzy1"
+        }
+      ]
+    },
+    {
+      "type": "short[]"
+    },
+    {
+      "type": "sun.management.ClassLoadingImpl"
+    },
+    {
+      "type": "sun.management.CompilationImpl"
+    },
+    {
+      "type": "sun.management.ManagementFactoryHelper$1"
+    },
+    {
+      "type": "sun.management.ManagementFactoryHelper$PlatformLoggingImpl"
+    },
+    {
+      "type": "sun.management.MemoryImpl"
+    },
+    {
+      "type": "sun.management.MemoryManagerImpl"
+    },
+    {
+      "type": "sun.management.MemoryPoolImpl"
+    },
+    {
+      "type": "sun.management.RuntimeImpl"
+    },
+    {
+      "type": "sun.management.VMManagementImpl",
+      "jniAccessible": true,
+      "fields": [
+        {
+          "name": "compTimeMonitoringSupport"
+        },
+        {
+          "name": "currentThreadCpuTimeSupport"
+        },
+        {
+          "name": "objectMonitorUsageSupport"
+        },
+        {
+          "name": "otherThreadCpuTimeSupport"
+        },
+        {
+          "name": "remoteDiagnosticCommandsSupport"
+        },
+        {
+          "name": "synchronizerUsageSupport"
+        },
+        {
+          "name": "threadAllocatedMemorySupport"
+        },
+        {
+          "name": "threadContentionMonitoringSupport"
+        }
+      ]
+    },
+    {
+      "type": "sun.misc.Unsafe",
+      "fields": [
+        {
+          "name": "theUnsafe"
+        }
+      ]
+    },
+    {
+      "type": "sun.reflect.misc.Trampoline",
+      "methods": [
+        {
+          "name": "invoke",
+          "parameterTypes": [
+            "java.lang.reflect.Method",
+            "java.lang.Object",
+            "java.lang.Object[]"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.NativePRNG",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.security.SecureRandomParameters"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData"
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData_en"
+    },
+    {
+      "type": "sun.text.resources.cldr.FormatData_en_US"
+    },
+    {
+      "type": "sun.util.resources.cldr.CalendarData"
+    }
+  ],
+  "resources": [
+    {
+      "glob": "META-INF/services/java.nio.channels.spi.SelectorProvider"
+    },
+    {
+      "glob": "META-INF/services/java.util.spi.ResourceBundleControlProvider"
+    },
+    {
+      "glob": "META-INF/services/org.eclipse.jetty.http.HttpFieldPreEncoder"
+    },
+    {
+      "glob": "META-INF/services/org.slf4j.spi.SLF4JServiceProvider"
+    },
+    {
+      "glob": "jakarta/servlet/LocalStrings.properties"
+    },
+    {
+      "glob": "jakarta/servlet/LocalStrings_en.properties"
+    },
+    {
+      "glob": "jakarta/servlet/LocalStrings_en_US.properties"
+    },
+    {
+      "glob": "jakarta/servlet/http/LocalStrings.properties"
+    },
+    {
+      "glob": "jakarta/servlet/http/LocalStrings_en.properties"
+    },
+    {
+      "glob": "jakarta/servlet/http/LocalStrings_en_US.properties"
+    },
+    {
+      "glob": "org/eclipse/jetty/http/encoding.properties"
+    },
+    {
+      "glob": "org/eclipse/jetty/http/mime.properties"
+    },
+    {
+      "glob": "org/eclipse/jetty/version/build.properties"
+    },
+    {
+      "glob": "simplelogger.properties"
+    },
+    {
+      "module": "jdk.jfr",
+      "glob": "jdk/jfr/internal/query/view.ini"
+    },
+    {
+      "bundle": "jakarta.servlet.LocalStrings"
+    },
+    {
+      "bundle": "jakarta.servlet.http.LocalStrings"
+    }
+  ]
+}

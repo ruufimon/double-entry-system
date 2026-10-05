@@ -1,13 +1,11 @@
 # Runs the API and UI together: open http://localhost:4200
 services:
   api:
-    build: .
-    image: banking-api:local
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
+    # GraalVM native build; use `build: .` and `image: banking-api:local` for the JVM image.
+    build:
+      context: .
+      dockerfile: Dockerfile.native
+    image: banking-api:native
 
   ui:
     build: ./ui
@@ -17,5 +15,7 @@ services:
     ports:
       - "4200:8080"
     depends_on:
+      # The distroless native image has no shell or curl for a health check,
+      # and it starts in milliseconds.
       api:
-        condition: service_healthy
+        condition: service_started

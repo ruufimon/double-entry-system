@@ -195,6 +195,9 @@ Run the API and UI together with Docker Compose, then open
 docker compose up --build
 ```
 
+Compose runs the [native API image](#native-api-image-graalvm). To use the JVM
+image instead, set the `api` service to `build: .` and `image: banking-api:local`.
+
 The UI image builds the Angular app and serves it with nginx, which proxies
 `/api/*` to the address in `API_URL` (default `http://api:8080`). Each image can
 also be built and run on its own:
@@ -206,6 +209,38 @@ docker run --rm -p 8080:8080 banking-api
 docker build -t banking-ui ui
 docker run --rm -p 4200:8080 -e API_URL=http://host.docker.internal:8080 banking-ui
 ```
+
+### Native API image (GraalVM)
+
+[`Dockerfile.native`](Dockerfile.native) compiles the API ahead of time with
+GraalVM `native-image` and runs it on a distroless base image. It starts in
+milliseconds and uses roughly a tenth of the JVM image's memory, at the cost of
+a slower build (about 3 minutes, with up to 3 GB of RAM for `native-image`).
+
+```bash
+docker build -f Dockerfile.native -t banking-api:native .
+docker run --rm -p 8080:8080 banking-api:native
+```
+
+Native images need to know ahead of time which classes are used through
+reflection, which Jetty, Scalatra, and json4s rely on. That metadata lives in
+`src/main/resources/META-INF/native-image/`. After changing routes, JSON
+models, or dependencies, regenerate it by running the API with the GraalVM
+tracing agent, exercising every route (including error responses), and then
+stopping the container so the agent writes its output:
+
+```bash
+sbt stage
+docker run --rm -p 8080:8080 \
+  -v "$PWD/target/out/jvm/scala-3.3.8/scalatra-ping-api/universal/stage/lib:/app/lib:ro" \
+  -v "$PWD/src/main/resources/META-INF/native-image/com.example/scalatra-ping-api:/config" \
+  --entrypoint java ghcr.io/graalvm/native-image-community:25 \
+  -agentlib:native-image-agent=config-output-dir=/config \
+  -cp '/app/lib/*' com.example.Server
+```
+
+A missing entry usually shows up as an HTTP 500 or a `ClassNotFoundException`
+in the native image but not on the JVM.
 
 ## Project Layout
 

@@ -48,7 +48,8 @@ See [spec/LedgerFlow.md](spec/LedgerFlow.md) for the detailed flow diagram.
 
 - JDK 17 or newer
 - sbt
-- Node.js and npm
+- Node.js 22 or newer (runs the Angular CLI)
+- [Bun](https://bun.sh) (installs UI dependencies and runs UI scripts)
 
 ## Run Locally
 
@@ -65,8 +66,8 @@ In another terminal, install and start the Angular application:
 
 ```bash
 cd ui
-npm install
-npm start
+bun install
+bun run start
 ```
 
 Open `http://localhost:4200`. During development, Angular proxies requests under
@@ -155,16 +156,19 @@ Run Angular unit tests and a production build:
 
 ```bash
 cd ui
-npm test
-npm run build
+bun run test
+bun run build
 ```
+
+Use `bun run test`, not `bun test`: the latter runs Bun's own test runner
+instead of the Angular (Vitest) tests.
 
 Install Playwright's Chromium binary once, then run the full-stack E2E test:
 
 ```bash
 cd ui
-npx playwright install chromium
-npm run e2e
+bunx playwright install chromium
+bun run e2e
 ```
 
 Playwright starts the backend and frontend automatically when they are not

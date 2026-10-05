@@ -23,13 +23,16 @@ services:
     name: banking-ui
     runtime: static
     rootDir: ui
-    buildCommand: npm ci && npm run build
+    buildCommand: bun install --frozen-lockfile && bun run build
     staticPublishPath: dist/banking-ui/browser
     autoDeploy: true
     buildFilter:
       paths:
         - ui/**
     envVars:
+      # Bun installs and runs scripts; the Angular CLI still needs Node 22+.
+      - key: BUN_VERSION
+        value: "1.3.14"
       - key: NODE_VERSION
         value: "24"
     routes:

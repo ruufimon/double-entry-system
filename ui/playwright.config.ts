@@ -27,7 +27,7 @@ export default defineConfig({
     },
     {
       name: 'Angular UI',
-      command: 'npm start -- --host localhost --port 4200',
+      command: 'bun run start --host localhost --port 4200',
       url: 'http://localhost:4200',
       reuseExistingServer: !process.env['CI'],
       timeout: 120_000,

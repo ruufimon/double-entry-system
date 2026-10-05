@@ -10,12 +10,13 @@ Start the Scalatra API from the repository root:
 sbt run
 ```
 
-Then start Angular in another terminal:
+Then start Angular in another terminal. Dependencies are managed with
+[Bun](https://bun.sh); the Angular CLI still runs on Node.js 22 or newer.
 
 ```bash
 cd ui
-npm install
-npm start
+bun install
+bun run start
 ```
 
 Open `http://localhost:4200`. The Angular development server rewrites `/api/*`
@@ -36,19 +37,22 @@ Deposit at least THB 100 before confirming that bill.
 ## Verification
 
 ```bash
-npm test
-npm run build
+bun run test
+bun run build
 ```
+
+Use `bun run test`, not `bun test`: the latter runs Bun's own test runner
+instead of the Angular (Vitest) tests.
 
 Install the Chromium browser used by Playwright once:
 
 ```bash
-npx playwright install chromium
+bunx playwright install chromium
 ```
 
 Then run the full-stack end-to-end test. Playwright starts both the Scalatra API
 and Angular development server when they are not already running:
 
 ```bash
-npm run e2e
+bun run e2e
 ```

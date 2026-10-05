@@ -1,11 +1,13 @@
 # Builds the Angular UI and serves it with nginx, proxying /api to the banking API.
 
+# Bun installs dependencies and runs scripts; the Angular CLI itself runs on Node.
 FROM node:24-slim AS build
+COPY --from=oven/bun:1.3.14-slim /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 COPY . .
-RUN npm run build
+RUN bun run build
 
 FROM nginxinc/nginx-unprivileged:1.29-alpine
 # Base URL of the banking API, without a trailing slash.

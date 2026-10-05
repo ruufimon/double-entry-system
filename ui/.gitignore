@@ -2,4 +2,6 @@
 /dist
 /.angular
 /.cache
+/playwright-report
+/test-results
 npm-debug.log*

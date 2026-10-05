@@ -39,3 +39,16 @@ Deposit at least THB 100 before confirming that bill.
 npm test
 npm run build
 ```
+
+Install the Chromium browser used by Playwright once:
+
+```bash
+npx playwright install chromium
+```
+
+Then run the full-stack end-to-end test. Playwright starts both the Scalatra API
+and Angular development server when they are not already running:
+
+```bash
+npm run e2e
+```

@@ -1,0 +1,10 @@
+# Used instead of .dockerignore when building Dockerfile.ui.
+# Send only the UI sources to the build.
+*
+!ui/
+ui/node_modules
+ui/dist
+ui/.angular
+ui/.cache
+ui/test-results
+ui/playwright-report

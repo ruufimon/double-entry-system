@@ -7,7 +7,9 @@ services:
     image: banking-api:native
 
   ui:
-    build: ./ui
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
     image: banking-ui:local
     environment:
       API_URL: http://api:8080

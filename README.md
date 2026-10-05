@@ -201,12 +201,12 @@ docker compose up --build
 ```
 
 Compose runs the [native API image](#native-api-image-graalvm). The UI image
-builds the Angular app and serves it with nginx, which proxies `/api/*` to the
+([`Dockerfile.ui`](Dockerfile.ui)) builds the Angular app and serves it with nginx, which proxies `/api/*` to the
 address in `API_URL` (default `http://api:8080`). The UI image can also be built
 and run on its own, against an API on the host:
 
 ```bash
-docker build -t banking-ui ui
+docker build -f Dockerfile.ui -t banking-ui .
 docker run --rm -p 4200:8080 -e API_URL=http://host.docker.internal:8080 banking-ui
 ```
 

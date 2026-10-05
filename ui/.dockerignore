@@ -1,8 +1,0 @@
-node_modules
-dist
-.angular
-.cache
-test-results
-playwright-report
-Dockerfile
-.dockerignore

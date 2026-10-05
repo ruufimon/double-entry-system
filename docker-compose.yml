@@ -1,0 +1,21 @@
+# Runs the API and UI together: open http://localhost:4200
+services:
+  api:
+    build: .
+    image: banking-api:local
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  ui:
+    build: ./ui
+    image: banking-ui:local
+    environment:
+      API_URL: http://api:8080
+    ports:
+      - "4200:8080"
+    depends_on:
+      api:
+        condition: service_healthy

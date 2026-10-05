@@ -186,11 +186,25 @@ assigns the API a URL other than `https://banking-api.onrender.com`, update the
 Because all data is held in memory, run the API as a single instance and expect
 every deploy or restart to reset accounts and ledger entries.
 
-To build and run the API image locally:
+### Docker
+
+Run the API and UI together with Docker Compose, then open
+`http://localhost:4200`:
+
+```bash
+docker compose up --build
+```
+
+The UI image builds the Angular app and serves it with nginx, which proxies
+`/api/*` to the address in `API_URL` (default `http://api:8080`). Each image can
+also be built and run on its own:
 
 ```bash
 docker build -t banking-api .
 docker run --rm -p 8080:8080 banking-api
+
+docker build -t banking-ui ui
+docker run --rm -p 4200:8080 -e API_URL=http://host.docker.internal:8080 banking-ui
 ```
 
 ## Project Layout

@@ -1,11 +1,19 @@
+# Resolve the API host per request instead of once at startup, so nginx starts
+# even when the API is not reachable yet and follows it across redeploys.
+# NGINX_LOCAL_RESOLVERS is read from /etc/resolv.conf by the image entrypoint.
+resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
+
 server {
-    listen 8080;
+    listen ${PORT};
     server_name _;
     root /usr/share/nginx/html;
 
     # Replaces the Angular dev-server proxy: /api/accounts/x -> ${API_URL}/accounts/x
     location /api/ {
-        proxy_pass ${API_URL}/;
+        set $api_upstream ${API_URL};
+        rewrite ^/api/(.*)$ /$1 break;
+        proxy_pass $api_upstream;
+        proxy_ssl_server_name on;
         proxy_set_header Host $proxy_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;

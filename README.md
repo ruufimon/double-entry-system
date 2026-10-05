@@ -201,14 +201,33 @@ docker compose up --build
 ```
 
 Compose runs the [native API image](#native-api-image-graalvm). The UI image
-([`Dockerfile.ui`](Dockerfile.ui)) builds the Angular app and serves it with nginx, which proxies `/api/*` to the
-address in `API_URL` (default `http://api:8080`). The UI image can also be built
-and run on its own, against an API on the host:
+([`Dockerfile.ui`](Dockerfile.ui)) builds the Angular app and serves it with
+nginx on `PORT` (default 8080), proxying `/api/*` to the address in `API_URL`
+(default `http://api:8080`, the Compose service name). nginx resolves that
+address per request, so it starts even when the API is unavailable and answers
+`/api/*` with 502 until the API is reachable. The UI image can also be built and
+run on its own, against an API on the host:
 
 ```bash
 docker build -f Dockerfile.ui -t banking-ui .
 docker run --rm -p 4200:8080 -e API_URL=http://host.docker.internal:8080 banking-ui
 ```
+
+### Railway
+
+Create two services from this repository and set these variables:
+
+| Service | Variable | Value |
+| --- | --- | --- |
+| API | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.native` |
+| API | `PORT` | `8080` |
+| UI | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.ui` |
+| UI | `API_URL` | `http://${{API.RAILWAY_PRIVATE_DOMAIN}}:8080` |
+
+Replace `API` in the reference variable with the API service's name in Railway.
+Generate a public domain for the UI service only; the API stays on Railway's
+private network. If the UI cannot reach the API privately, generate a public
+domain for the API too and set `API_URL` to that `https://` URL instead.
 
 ### Native API image (GraalVM)
 

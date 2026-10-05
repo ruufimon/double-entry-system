@@ -11,8 +11,13 @@ COPY ui/ .
 RUN bun run build
 
 FROM nginxinc/nginx-unprivileged:1.29-alpine
-# Base URL of the banking API, without a trailing slash.
+# Base URL of the banking API, without a trailing slash. The default matches the
+# Compose service name; on other hosts set it to the API's private or public URL.
 ENV API_URL=http://api:8080
+# Port nginx listens on; hosts such as Railway override it.
+ENV PORT=8080
+# Let the entrypoint expose the container's DNS servers as NGINX_LOCAL_RESOLVERS.
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 COPY ui/nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist/banking-ui/browser /usr/share/nginx/html
 EXPOSE 8080

@@ -1,0 +1,11 @@
+.git
+.bsp
+.bloop
+.idea
+.metals
+target
+project/target
+project/project
+ui
+spec
+*.md

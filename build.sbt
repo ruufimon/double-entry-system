@@ -6,6 +6,7 @@ lazy val scalatraVersion = "3.2.1"
 lazy val jettyVersion = "12.1.13"
 
 lazy val root = (project in file("."))
+  .enablePlugins(JavaAppPackaging)
   .settings(
     name := "scalatra-ping-api",
     libraryDependencies ++= Seq(

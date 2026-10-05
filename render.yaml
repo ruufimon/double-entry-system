@@ -1,0 +1,44 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+#
+# The API keeps all accounts and ledger entries in memory, so it must run as a
+# single instance; every deploy or restart resets the data.
+services:
+  - type: web
+    name: banking-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    numInstances: 1
+    healthCheckPath: /ping
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - build.sbt
+        - project/**
+        - src/main/**
+        - Dockerfile
+
+  - type: web
+    name: banking-ui
+    runtime: static
+    rootDir: ui
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist/banking-ui/browser
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - ui/**
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+    routes:
+      # Replaces the Angular dev-server proxy (ui/proxy.conf.json).
+      # Update the host if Render assigns the API a different onrender.com URL.
+      - type: rewrite
+        source: /api/*
+        destination: https://banking-api.onrender.com/*
+      # Let Angular handle deep links such as /accounts/:accountId.
+      - type: rewrite
+        source: /*
+        destination: /index.html

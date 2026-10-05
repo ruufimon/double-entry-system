@@ -170,6 +170,29 @@ npm run e2e
 Playwright starts the backend and frontend automatically when they are not
 already running.
 
+## Deploy
+
+The repository includes a [Render Blueprint](render.yaml) with two services:
+
+- `banking-api`: the Scalatra API, built from the [`Dockerfile`](Dockerfile)
+- `banking-ui`: the Angular build, served as a static site. It rewrites `/api/*`
+  to the API and all other paths to `index.html`.
+
+To deploy, open the Render dashboard, choose **New → Blueprint**, and select
+this repository. Both services redeploy on every push to `main`. If Render
+assigns the API a URL other than `https://banking-api.onrender.com`, update the
+`/api/*` rewrite in `render.yaml`.
+
+Because all data is held in memory, run the API as a single instance and expect
+every deploy or restart to reset accounts and ledger entries.
+
+To build and run the API image locally:
+
+```bash
+docker build -t banking-api .
+docker run --rm -p 8080:8080 banking-api
+```
+
 ## Project Layout
 
 ```text

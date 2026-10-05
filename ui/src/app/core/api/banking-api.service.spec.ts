@@ -43,6 +43,36 @@ describe('BankingApiService', () => {
     expect(balance).toBe(125.5);
   });
 
+  it('loads an account overview with one encoded request', () => {
+    let activityCount = 0;
+    service
+      .getAccountOverview('account/123')
+      .subscribe((response) => (activityCount = response.activities.length));
+
+    const request = http.expectOne('/api/accounts/account%2F123/overview');
+    expect(request.request.method).toBe('GET');
+    request.flush({
+      accountId: 'account/123',
+      currency: 'THB',
+      balance: 125.5,
+      activities: [
+        {
+          transactionId: 'transaction-1',
+          operation: 'deposit',
+          effect: 'increase',
+          amount: 125.5,
+          currency: 'THB',
+          balanceAfter: 125.5,
+          occurredAt: '2026-10-05T01:00:00Z',
+          status: 'posted',
+          originalTransactionId: null,
+        },
+      ],
+    });
+
+    expect(activityCount).toBe(1);
+  });
+
   it('sends a numeric deposit amount', () => {
     service.deposit('account-123', 10.25).subscribe();
 

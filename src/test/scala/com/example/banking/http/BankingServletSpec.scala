@@ -193,6 +193,37 @@ final class BankingServletSpec extends ScalatraFunSuite:
     }
   }
 
+  test("GET /accounts/:accountId/overview returns one consistent ledger snapshot") {
+    createAccount("overview-account")
+    postJson("/accounts/overview-account/deposits", """{"amount":20.00}""") {
+      status shouldBe 200
+    }
+    postJson("/accounts/overview-account/withdrawals", """{"amount":5.00}""") {
+      status shouldBe 200
+    }
+
+    get("/accounts/overview-account/overview") {
+      status shouldBe 200
+      val response = parse(body).extract[AccountOverviewResponse]
+      response.accountId shouldBe "overview-account"
+      response.currency shouldBe "THB"
+      response.balance shouldBe BigDecimal("15.00")
+      response.activities.map(_.operation) shouldBe Vector("deposit", "withdrawal")
+      response.activities.last.balanceAfter shouldBe response.balance
+    }
+  }
+
+  test("GET /accounts/:accountId/overview returns an empty zero-balance account") {
+    createAccount("empty-overview-account")
+
+    get("/accounts/empty-overview-account/overview") {
+      status shouldBe 200
+      val response = parse(body).extract[AccountOverviewResponse]
+      response.balance shouldBe BigDecimal(0)
+      response.activities shouldBe empty
+    }
+  }
+
   test("GET account ledger resources rejects an unknown account") {
     get("/accounts/unknown-ledger-account/balance") {
       status shouldBe 404
@@ -200,6 +231,11 @@ final class BankingServletSpec extends ScalatraFunSuite:
     }
 
     get("/accounts/unknown-ledger-account/activities") {
+      status shouldBe 404
+      (parse(body) \ "error").extract[String] shouldBe "account_not_found"
+    }
+
+    get("/accounts/unknown-ledger-account/overview") {
       status shouldBe 404
       (parse(body) \ "error").extract[String] shouldBe "account_not_found"
     }

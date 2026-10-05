@@ -15,6 +15,38 @@ test('opens a new account and shows its empty dashboard', async ({ page }, testI
   await expect(page.getByText('No activity has been recorded yet.')).toBeVisible();
 });
 
+test('keeps the dashboard layout stable while account details load', async ({
+  page,
+  request,
+}, testInfo) => {
+  const accountId = uniqueAccountId(testInfo);
+  await request.put(`/api/accounts/${accountId}`, { data: {} });
+
+  let releaseOverview!: () => void;
+  const overviewGate = new Promise<void>((resolve) => {
+    releaseOverview = resolve;
+  });
+  await page.route('**/api/**', async (route) => {
+    const requestPath = new URL(route.request().url()).pathname;
+    if (requestPath === `/api/accounts/${accountId}/overview`) {
+      await overviewGate;
+    }
+    await route.continue();
+  });
+
+  await page.goto(`/accounts/${accountId}`);
+
+  await expect(page.getByRole('status')).toHaveText('Loading account details…');
+  await expect(page.locator('.account-skeleton .balance-layout')).toBeVisible();
+  await expect(page.locator('.skeleton-activities .activity-row')).toHaveCount(3);
+
+  releaseOverview();
+
+  await expect(page.locator('.account-skeleton')).toBeHidden();
+  await expect(page.getByText('Available balance')).toBeVisible();
+  await expect(page.getByText('No activity has been recorded yet.')).toBeVisible();
+});
+
 test('rejects an invalid account ID', async ({ page }) => {
   await page.goto('/');
   const accountId = page.getByLabel('Account ID');

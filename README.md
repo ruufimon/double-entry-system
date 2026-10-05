@@ -79,6 +79,7 @@ Open `http://localhost:4200`. During development, Angular proxies requests under
 | --- | --- | --- |
 | `GET` | `/ping` | Backend health check |
 | `PUT` | `/accounts/:accountId` | Create an account, or return the existing account |
+| `GET` | `/accounts/:accountId/overview` | Get one consistent balance and activity snapshot |
 | `GET` | `/accounts/:accountId/balance` | Get the ledger-derived balance |
 | `GET` | `/accounts/:accountId/activities` | List customer-facing ledger activity |
 | `POST` | `/accounts/:accountId/deposits` | Deposit funds |

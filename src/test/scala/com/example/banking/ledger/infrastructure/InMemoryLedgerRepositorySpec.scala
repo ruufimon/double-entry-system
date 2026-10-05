@@ -144,6 +144,25 @@ final class InMemoryLedgerRepositorySpec extends AnyFunSuite with Matchers:
     activities(2).originalTransactionId shouldBe Some(paymentId)
   }
 
+  test("account overview uses one internally consistent ledger snapshot") {
+    val (_, operations) = createLedger()
+    requireRight(operations.deposit(UUID.randomUUID(), Account, TenBaht, OccurredAt))
+    requireRight(
+      operations.withdraw(
+        UUID.randomUUID(),
+        Account,
+        requireRight(Money.positive(BigDecimal("2.50"))),
+        OccurredAt.plusSeconds(1)
+      )
+    )
+
+    val overview = requireRight(operations.overview(Account))
+
+    overview.account.balance shouldBe BigDecimal("7.50")
+    overview.activities should have size 2
+    overview.activities.last.balanceAfter shouldBe overview.account.balance
+  }
+
   private def createLedger(): (InMemoryLedgerRepository, LedgerBackedAccountOperations) =
     val repository = new InMemoryLedgerRepository()
     val operations = new LedgerBackedAccountOperations(

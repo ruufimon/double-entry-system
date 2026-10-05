@@ -14,6 +14,14 @@ final class InMemoryLedgerRepository extends LedgerRepository:
     balanceOf(accountId)
   }
 
+  override def snapshot(accountId: AccountId): AccountLedgerSnapshot = synchronized {
+    val accountActivities = activitiesOf(accountId)
+    AccountLedgerSnapshot(
+      balance = accountActivities.lastOption.fold(BigDecimal(0))(_.balanceAfter),
+      activities = accountActivities
+    )
+  }
+
   override def post(transaction: LedgerTransaction): Either[DomainError, Account] =
     synchronized {
       append(transaction)
@@ -43,29 +51,7 @@ final class InMemoryLedgerRepository extends LedgerRepository:
       accountId: AccountId
   ): Vector[AccountActivity] =
     synchronized {
-      val reversedTransactionIds = journal.flatMap(_.reversesTransactionId).toSet
-      var runningBalance = BigDecimal(0)
-      journal.flatMap { transaction =>
-        customerEntry(transaction, accountId).map { entry =>
-          runningBalance = applyEntry(runningBalance, entry)
-          AccountActivity(
-            transactionId = transaction.transactionId,
-            operation = transaction.operation,
-            effect = entry.direction match
-              case LedgerDirection.Credit => BalanceEffect.Increase
-              case LedgerDirection.Debit  => BalanceEffect.Decrease,
-            amount = entry.amount.amount,
-            currency = entry.currency,
-            balanceAfter = runningBalance,
-            occurredAt = transaction.occurredAt,
-            status =
-              if reversedTransactionIds.contains(transaction.transactionId) then
-                AccountActivityStatus.Reversed
-              else AccountActivityStatus.Posted,
-            originalTransactionId = transaction.reversesTransactionId
-          )
-        }
-      }
+      activitiesOf(accountId)
     }
 
   def transactions: Vector[LedgerTransaction] = synchronized(journal)
@@ -95,6 +81,31 @@ final class InMemoryLedgerRepository extends LedgerRepository:
   private def balanceOf(accountId: AccountId): BigDecimal =
     journal.foldLeft(BigDecimal(0)) { (balance, transaction) =>
       customerEntry(transaction, accountId).fold(balance)(applyEntry(balance, _))
+    }
+
+  private def activitiesOf(accountId: AccountId): Vector[AccountActivity] =
+    val reversedTransactionIds = journal.flatMap(_.reversesTransactionId).toSet
+    var runningBalance = BigDecimal(0)
+    journal.flatMap { transaction =>
+      customerEntry(transaction, accountId).map { entry =>
+        runningBalance = applyEntry(runningBalance, entry)
+        AccountActivity(
+          transactionId = transaction.transactionId,
+          operation = transaction.operation,
+          effect = entry.direction match
+            case LedgerDirection.Credit => BalanceEffect.Increase
+            case LedgerDirection.Debit  => BalanceEffect.Decrease,
+          amount = entry.amount.amount,
+          currency = entry.currency,
+          balanceAfter = runningBalance,
+          occurredAt = transaction.occurredAt,
+          status =
+            if reversedTransactionIds.contains(transaction.transactionId) then
+              AccountActivityStatus.Reversed
+            else AccountActivityStatus.Posted,
+          originalTransactionId = transaction.reversesTransactionId
+        )
+      }
     }
 
   private def customerEntry(

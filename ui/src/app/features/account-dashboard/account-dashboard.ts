@@ -1,7 +1,6 @@
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { forkJoin } from 'rxjs';
 
 import { ApiError, toApiError } from '../../core/api/api-error';
 import { BankingApiService } from '../../core/api/banking-api.service';
@@ -18,13 +17,44 @@ import { AccountActivity, AccountBalance, BankingOperation } from '../../core/ap
         <p class="eyebrow">Account overview</p>
         <h1>{{ accountId }}</h1>
       </div>
-      <button class="button button-quiet" type="button" (click)="loadAccount()" [disabled]="loading()">
-        Refresh
+      <button class="button button-quiet" type="button" (click)="loadAccount()" [disabled]="loading() || refreshing()">
+        {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
       </button>
     </section>
 
+    @if (refreshError()) {
+      <div class="notice notice-error refresh-notice" role="alert">
+        <div><strong>We couldn't refresh this account.</strong><span>{{ refreshError()?.message }}</span></div>
+        <button class="button button-quiet" type="button" (click)="loadAccount()">Try again</button>
+      </div>
+    }
+
     @if (loading()) {
-      <div class="card loading-card" aria-live="polite"><span class="spinner"></span> Loading account…</div>
+      <span class="visually-hidden" role="status">Loading account details…</span>
+      <div class="account-skeleton" aria-hidden="true">
+        <section class="balance-layout">
+          <article class="balance-card skeleton-surface">
+            <span class="skeleton-line skeleton-label"></span>
+            <span class="skeleton-line skeleton-balance"></span>
+            <span class="skeleton-line skeleton-meta"></span>
+          </article>
+          <div class="quick-actions">
+            <div class="action-card skeleton-surface"><span class="skeleton-circle"></span><span class="skeleton-line"></span><span class="skeleton-line skeleton-short"></span></div>
+            <div class="action-card skeleton-surface"><span class="skeleton-circle"></span><span class="skeleton-line"></span><span class="skeleton-line skeleton-short"></span></div>
+            <div class="action-card skeleton-surface"><span class="skeleton-circle"></span><span class="skeleton-line"></span><span class="skeleton-line skeleton-short"></span></div>
+          </div>
+        </section>
+        <section class="activity-section">
+          <div class="section-heading">
+            <div><span class="skeleton-line skeleton-label"></span><span class="skeleton-line skeleton-heading"></span></div>
+          </div>
+          <div class="activity-list skeleton-activities">
+            <div class="activity-row"><span class="skeleton-circle"></span><span class="skeleton-line"></span><span class="skeleton-line"></span><span class="skeleton-line"></span></div>
+            <div class="activity-row"><span class="skeleton-circle"></span><span class="skeleton-line"></span><span class="skeleton-line"></span><span class="skeleton-line"></span></div>
+            <div class="activity-row"><span class="skeleton-circle"></span><span class="skeleton-line"></span><span class="skeleton-line"></span><span class="skeleton-line"></span></div>
+          </div>
+        </section>
+      </div>
     } @else if (error() && !accountMissing()) {
       <div class="notice notice-error" role="alert">
         <div><strong>We couldn't load this account.</strong><span>{{ error()?.message }}</span></div>
@@ -39,60 +69,62 @@ import { AccountActivity, AccountBalance, BankingOperation } from '../../core/ap
         <a class="button button-primary" [routerLink]="['/accounts', accountId, 'deposit']">Make a deposit</a>
       </section>
     } @else {
-      <section class="balance-layout">
-        <article class="balance-card">
-          <p>Available balance</p>
-          <strong>{{ balance()?.balance | currency:'THB':'symbol-narrow':'1.2-2' }}</strong>
-          <span>{{ balance()?.currency }} · Ledger derived</span>
-          <div class="balance-decoration" aria-hidden="true"></div>
-        </article>
+      <div class="account-content" [attr.aria-busy]="refreshing()">
+        <section class="balance-layout">
+          <article class="balance-card">
+            <p>Available balance</p>
+            <strong>{{ balance()?.balance | currency:'THB':'symbol-narrow':'1.2-2' }}</strong>
+            <span>{{ balance()?.currency }} · Ledger derived</span>
+            <div class="balance-decoration" aria-hidden="true"></div>
+          </article>
 
-        <nav class="quick-actions" aria-label="Account actions">
-          <a class="action-card" [routerLink]="['/accounts', accountId, 'deposit']">
-            <span class="action-icon increase">＋</span><strong>Deposit</strong><small>Add funds</small>
-          </a>
-          <a class="action-card" [routerLink]="['/accounts', accountId, 'withdraw']">
-            <span class="action-icon decrease">−</span><strong>Withdraw</strong><small>Take out funds</small>
-          </a>
-          <a class="action-card" [routerLink]="['/accounts', accountId, 'bill-payment']">
-            <span class="action-icon bill">↗</span><strong>Pay a bill</strong><small>Settle a biller</small>
-          </a>
-        </nav>
-      </section>
+          <nav class="quick-actions" aria-label="Account actions">
+            <a class="action-card" [routerLink]="['/accounts', accountId, 'deposit']">
+              <span class="action-icon increase">＋</span><strong>Deposit</strong><small>Add funds</small>
+            </a>
+            <a class="action-card" [routerLink]="['/accounts', accountId, 'withdraw']">
+              <span class="action-icon decrease">−</span><strong>Withdraw</strong><small>Take out funds</small>
+            </a>
+            <a class="action-card" [routerLink]="['/accounts', accountId, 'bill-payment']">
+              <span class="action-icon bill">↗</span><strong>Pay a bill</strong><small>Settle a biller</small>
+            </a>
+          </nav>
+        </section>
 
-      <section class="activity-section">
-        <div class="section-heading">
-          <div><p class="eyebrow">Immutable record</p><h2>Recent activity</h2></div>
-          <span>{{ activities().length }} entries</span>
-        </div>
-
-        @if (activities().length === 0) {
-          <div class="card empty-list">No activity has been recorded yet.</div>
-        } @else {
-          <div class="activity-list">
-            @for (activity of activities(); track activity.transactionId) {
-              <article class="activity-row" [class.reversed]="activity.status === 'reversed'">
-                <span class="activity-icon" [class.increase]="activity.effect === 'increase'">
-                  {{ activity.effect === 'increase' ? '↓' : '↑' }}
-                </span>
-                <div class="activity-name">
-                  <strong>{{ operationLabel(activity.operation) }}</strong>
-                  <span>{{ activity.occurredAt | date:'medium' }}</span>
-                </div>
-                <div class="activity-status">
-                  <span class="status-chip" [class.status-reversed]="activity.status === 'reversed'">
-                    {{ activity.status }}
-                  </span>
-                </div>
-                <div class="activity-amount" [class.positive]="activity.effect === 'increase'">
-                  <strong>{{ activity.effect === 'increase' ? '+' : '−' }}{{ activity.amount | currency:'THB':'symbol-narrow':'1.2-2' }}</strong>
-                  <span>Balance {{ activity.balanceAfter | currency:'THB':'symbol-narrow':'1.2-2' }}</span>
-                </div>
-              </article>
-            }
+        <section class="activity-section">
+          <div class="section-heading">
+            <div><p class="eyebrow">Immutable record</p><h2>Recent activity</h2></div>
+            <span>{{ activities().length }} entries</span>
           </div>
-        }
-      </section>
+
+          @if (activities().length === 0) {
+            <div class="card empty-list">No activity has been recorded yet.</div>
+          } @else {
+            <div class="activity-list">
+              @for (activity of activities(); track activity.transactionId) {
+                <article class="activity-row" [class.reversed]="activity.status === 'reversed'">
+                  <span class="activity-icon" [class.increase]="activity.effect === 'increase'">
+                    {{ activity.effect === 'increase' ? '↓' : '↑' }}
+                  </span>
+                  <div class="activity-name">
+                    <strong>{{ operationLabel(activity.operation) }}</strong>
+                    <span>{{ activity.occurredAt | date:'medium' }}</span>
+                  </div>
+                  <div class="activity-status">
+                    <span class="status-chip" [class.status-reversed]="activity.status === 'reversed'">
+                      {{ activity.status }}
+                    </span>
+                  </div>
+                  <div class="activity-amount" [class.positive]="activity.effect === 'increase'">
+                    <strong>{{ activity.effect === 'increase' ? '+' : '−' }}{{ activity.amount | currency:'THB':'symbol-narrow':'1.2-2' }}</strong>
+                    <span>Balance {{ activity.balanceAfter | currency:'THB':'symbol-narrow':'1.2-2' }}</span>
+                  </div>
+                </article>
+              }
+            </div>
+          }
+        </section>
+      </div>
     }
   `,
 })
@@ -102,8 +134,10 @@ export class AccountDashboard implements OnInit {
 
   readonly accountId = this.route.snapshot.paramMap.get('accountId') ?? '';
   readonly loading = signal(true);
+  readonly refreshing = signal(false);
   readonly accountMissing = signal(false);
   readonly error = signal<ApiError | null>(null);
+  readonly refreshError = signal<ApiError | null>(null);
   readonly balance = signal<AccountBalance | null>(null);
   readonly activities = signal<readonly AccountActivity[]>([]);
 
@@ -112,24 +146,33 @@ export class AccountDashboard implements OnInit {
   }
 
   loadAccount(): void {
-    this.loading.set(true);
-    this.error.set(null);
-    this.accountMissing.set(false);
+    const hasAccountData = this.balance() !== null;
+    if (hasAccountData) {
+      this.refreshing.set(true);
+      this.refreshError.set(null);
+    } else {
+      this.loading.set(true);
+      this.error.set(null);
+      this.accountMissing.set(false);
+    }
 
-    forkJoin({
-      balance: this.api.getBalance(this.accountId),
-      activities: this.api.getActivities(this.accountId),
-    }).subscribe({
-      next: ({ balance, activities }) => {
-        this.balance.set(balance);
-        this.activities.set(activities);
+    this.api.getAccountOverview(this.accountId).subscribe({
+      next: (overview) => {
+        this.balance.set(overview);
+        this.activities.set(overview.activities);
         this.loading.set(false);
+        this.refreshing.set(false);
       },
       error: (error: unknown) => {
         const apiError = toApiError(error);
-        this.accountMissing.set(apiError.code === 'account_not_found');
-        this.error.set(apiError);
-        this.loading.set(false);
+        if (hasAccountData) {
+          this.refreshError.set(apiError);
+          this.refreshing.set(false);
+        } else {
+          this.accountMissing.set(apiError.code === 'account_not_found');
+          this.error.set(apiError);
+          this.loading.set(false);
+        }
       },
     });
   }

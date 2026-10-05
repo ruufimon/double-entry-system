@@ -6,6 +6,7 @@ import { toApiError } from './api-error';
 import {
   AccountActivity,
   AccountBalance,
+  AccountOverview,
   AccountResponse,
   BalanceChangeResponse,
   BillPaymentAccepted,
@@ -33,6 +34,12 @@ export class BankingApiService {
   getActivities(accountId: string): Observable<readonly AccountActivity[]> {
     return this.request(
       this.http.get<readonly AccountActivity[]>(`${this.accountUrl(accountId)}/activities`),
+    );
+  }
+
+  getAccountOverview(accountId: string): Observable<AccountOverview> {
+    return this.request(
+      this.http.get<AccountOverview>(`${this.accountUrl(accountId)}/overview`),
     );
   }
 

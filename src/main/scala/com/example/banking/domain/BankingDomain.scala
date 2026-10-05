@@ -38,6 +38,11 @@ final case class Account(id: AccountId, balance: BigDecimal) derives CanEqual
 
 final case class AccountOpening(account: Account, created: Boolean) derives CanEqual
 
+final case class AccountOverview(
+    account: Account,
+    activities: Vector[AccountActivity]
+) derives CanEqual
+
 enum Currency(val code: String) derives CanEqual:
   case THB extends Currency("THB")
 

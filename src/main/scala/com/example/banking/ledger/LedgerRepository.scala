@@ -8,6 +8,7 @@ import com.example.domain.DomainError
 
 trait LedgerRepository:
   def balance(accountId: AccountId): BigDecimal
+  def snapshot(accountId: AccountId): AccountLedgerSnapshot
   def post(transaction: LedgerTransaction): Either[DomainError, Account]
   def reverse(
       originalTransactionId: UUID,

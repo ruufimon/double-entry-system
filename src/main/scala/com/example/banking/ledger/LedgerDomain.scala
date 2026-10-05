@@ -3,7 +3,7 @@ package com.example.banking.ledger
 import java.time.Instant
 import java.util.UUID
 
-import com.example.banking.domain.{AccountId, BankingOperation, Currency, Money}
+import com.example.banking.domain.{AccountActivity, AccountId, BankingOperation, Currency, Money}
 import com.example.domain.DomainError
 
 enum LedgerDirection derives CanEqual:
@@ -13,6 +13,11 @@ enum LedgerAccount derives CanEqual:
   case Customer(accountId: AccountId)
   case Cash
   case BillerClearing
+
+final case class AccountLedgerSnapshot(
+    balance: BigDecimal,
+    activities: Vector[AccountActivity]
+) derives CanEqual
 
 final case class LedgerEntry(
     account: LedgerAccount,

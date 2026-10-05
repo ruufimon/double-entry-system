@@ -26,6 +26,10 @@ export interface AccountActivity {
   originalTransactionId: string | null;
 }
 
+export interface AccountOverview extends AccountBalance {
+  activities: readonly AccountActivity[];
+}
+
 export interface BalanceChangeResponse {
   accountId: string;
   balance: number;

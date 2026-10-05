@@ -32,6 +32,12 @@ final case class DepositResponse(accountId: String, balance: BigDecimal)
 final case class WithdrawalRequest(amount: BigDecimal)
 final case class WithdrawalResponse(accountId: String, balance: BigDecimal)
 final case class AccountBalanceResponse(accountId: String, currency: String, balance: BigDecimal)
+final case class AccountOverviewResponse(
+    accountId: String,
+    currency: String,
+    balance: BigDecimal,
+    activities: Vector[AccountActivityResponse]
+)
 final case class AccountActivityResponse(
     transactionId: String,
     operation: String,
@@ -112,6 +118,20 @@ final class BankingServlet(
       accountId <- AccountId.from(params("accountId"))
       account <- accountOperations.find(accountId)
     yield AccountBalanceResponse(account.id.value, "THB", account.balance)
+
+    respond(result)
+  }
+
+  get("/:accountId/overview") {
+    val result = for
+      accountId <- AccountId.from(params("accountId"))
+      overview <- accountOperations.overview(accountId)
+    yield AccountOverviewResponse(
+      accountId = overview.account.id.value,
+      currency = Currency.THB.code,
+      balance = overview.account.balance,
+      activities = overview.activities.map(toActivityResponse)
+    )
 
     respond(result)
   }

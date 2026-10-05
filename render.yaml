@@ -6,7 +6,8 @@ services:
   - type: web
     name: banking-api
     runtime: docker
-    dockerfilePath: ./Dockerfile
+    # GraalVM native build: needs about 3 GB of RAM and a few minutes to build.
+    dockerfilePath: ./Dockerfile.native
     dockerContext: .
     plan: starter
     numInstances: 1
@@ -17,7 +18,7 @@ services:
         - build.sbt
         - project/**
         - src/main/**
-        - Dockerfile
+        - Dockerfile.native
 
   - type: web
     name: banking-ui

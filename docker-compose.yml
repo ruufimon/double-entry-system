@@ -1,7 +1,6 @@
 # Runs the API and UI together: open http://localhost:4200
 services:
   api:
-    # GraalVM native build; use `build: .` and `image: banking-api:local` for the JVM image.
     build:
       context: .
       dockerfile: Dockerfile.native

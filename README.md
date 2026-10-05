@@ -178,7 +178,8 @@ already running.
 
 The repository includes a [Render Blueprint](render.yaml) with two services:
 
-- `banking-api`: the Scalatra API, built from the [`Dockerfile`](Dockerfile)
+- `banking-api`: the Scalatra API, built as a GraalVM native image from
+  [`Dockerfile.native`](Dockerfile.native)
 - `banking-ui`: the Angular build, served as a static site. It rewrites `/api/*`
   to the API and all other paths to `index.html`.
 
@@ -199,17 +200,12 @@ Run the API and UI together with Docker Compose, then open
 docker compose up --build
 ```
 
-Compose runs the [native API image](#native-api-image-graalvm). To use the JVM
-image instead, set the `api` service to `build: .` and `image: banking-api:local`.
-
-The UI image builds the Angular app and serves it with nginx, which proxies
-`/api/*` to the address in `API_URL` (default `http://api:8080`). Each image can
-also be built and run on its own:
+Compose runs the [native API image](#native-api-image-graalvm). The UI image
+builds the Angular app and serves it with nginx, which proxies `/api/*` to the
+address in `API_URL` (default `http://api:8080`). The UI image can also be built
+and run on its own, against an API on the host:
 
 ```bash
-docker build -t banking-api .
-docker run --rm -p 8080:8080 banking-api
-
 docker build -t banking-ui ui
 docker run --rm -p 4200:8080 -e API_URL=http://host.docker.internal:8080 banking-ui
 ```
@@ -218,8 +214,9 @@ docker run --rm -p 4200:8080 -e API_URL=http://host.docker.internal:8080 banking
 
 [`Dockerfile.native`](Dockerfile.native) compiles the API ahead of time with
 GraalVM `native-image` and runs it on a distroless base image. It starts in
-milliseconds and uses roughly a tenth of the JVM image's memory, at the cost of
-a slower build (about 3 minutes, with up to 3 GB of RAM for `native-image`).
+milliseconds and uses roughly a tenth of the memory of the API on the JVM, at
+the cost of a slower build (about 3 minutes, with up to 3 GB of RAM for
+`native-image`). It is the only API image; for development, use `sbt run`.
 
 ```bash
 docker build -f Dockerfile.native -t banking-api:native .

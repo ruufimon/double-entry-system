@@ -184,6 +184,31 @@
       ]
     },
     {
+      "type": "com.example.banking.http.AccountOverviewResponse",
+      "fields": [
+        {
+          "name": "accountId"
+        },
+        {
+          "name": "activities"
+        },
+        {
+          "name": "balance"
+        },
+        {
+          "name": "currency"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AccountOverviewResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
       "type": "com.example.banking.http.AccountResponse",
       "fields": [
         {

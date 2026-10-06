@@ -127,6 +127,23 @@ describe('AccountDashboard', () => {
     expect(activityRows[1].textContent).toContain('+฿100.00');
   });
 
+  it('renders an empty activity list when an older API omits activities', () => {
+    const fixture = TestBed.createComponent(AccountDashboard);
+    fixture.detectChanges();
+
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/accounts/account-123/overview')
+      .flush({
+        accountId: 'account-123',
+        currency: 'THB',
+        balance: 100,
+      });
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.loading()).toBe(false);
+    expect(fixture.nativeElement.textContent).toContain('No activity has been recorded yet.');
+  });
+
   it('preserves current data and shows a warning when refresh fails', () => {
     const fixture = TestBed.createComponent(AccountDashboard);
     const http = TestBed.inject(HttpTestingController);

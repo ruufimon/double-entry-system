@@ -101,6 +101,32 @@ describe('AccountDashboard', () => {
     );
   });
 
+  it('shows the newest activity first', () => {
+    const fixture = TestBed.createComponent(AccountDashboard);
+    fixture.detectChanges();
+
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/accounts/account-123/overview')
+      .flush({
+        ...initialOverview,
+        balance: 125,
+        activities: [
+          ...initialOverview.activities,
+          {
+            ...initialOverview.activities[0],
+            transactionId: 'transaction-2',
+            amount: 25,
+            balanceAfter: 125,
+          },
+        ],
+      });
+    fixture.detectChanges();
+
+    const activityRows = fixture.nativeElement.querySelectorAll('.activity-row');
+    expect(activityRows[0].textContent).toContain('+฿25.00');
+    expect(activityRows[1].textContent).toContain('+฿100.00');
+  });
+
   it('preserves current data and shows a warning when refresh fails', () => {
     const fixture = TestBed.createComponent(AccountDashboard);
     const http = TestBed.inject(HttpTestingController);

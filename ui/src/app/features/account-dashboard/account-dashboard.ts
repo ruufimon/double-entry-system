@@ -159,7 +159,7 @@ export class AccountDashboard implements OnInit {
     this.api.getAccountOverview(this.accountId).subscribe({
       next: (overview) => {
         this.balance.set(overview);
-        this.activities.set(overview.activities);
+        this.activities.set([...overview.activities].reverse());
         this.loading.set(false);
         this.refreshing.set(false);
       },

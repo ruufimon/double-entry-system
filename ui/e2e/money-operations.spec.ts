@@ -3,7 +3,7 @@ import { activityRows, balanceCard, openAccount, uniqueAccountId } from './suppo
 
 test('deposits funds and records the activity on the dashboard', async ({ page, request }, testInfo) => {
   const accountId = uniqueAccountId(testInfo);
-  await openAccount(request, accountId);
+  await openAccount(request, accountId, 50);
 
   await page.goto(`/accounts/${accountId}`);
   await page.getByRole('link', { name: /Deposit/ }).click();
@@ -13,12 +13,12 @@ test('deposits funds and records the activity on the dashboard', async ({ page, 
   await page.getByRole('button', { name: 'Confirm deposit' }).click();
 
   await expect(page).toHaveURL(`/accounts/${accountId}`);
-  await expect(balanceCard(page)).toHaveText('฿150.25');
-  await expect(activityRows(page)).toHaveCount(1);
+  await expect(balanceCard(page)).toHaveText('฿200.25');
+  await expect(activityRows(page)).toHaveCount(2);
   const deposit = activityRows(page).first();
   await expect(deposit).toContainText('Deposit');
   await expect(deposit).toContainText('+฿150.25');
-  await expect(deposit).toContainText('Balance ฿150.25');
+  await expect(deposit).toContainText('Balance ฿200.25');
 });
 
 test('withdraws funds and shows the remaining balance', async ({ page, request }, testInfo) => {

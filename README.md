@@ -17,7 +17,7 @@ when the backend restarts.
 - Customer-facing account activity history
 - Two-step bill payment inquiry and confirmation
 - Internal message bus for account charging, settlement, reversal, and auditing
-- Cats-powered validation and immutable ledger balance state transitions
+- Cats-powered validation, non-empty ledger entries, and immutable balance transitions
 - Angular account dashboard and operation flows
 - Scala unit and HTTP tests, Angular unit tests, and Playwright E2E coverage
 

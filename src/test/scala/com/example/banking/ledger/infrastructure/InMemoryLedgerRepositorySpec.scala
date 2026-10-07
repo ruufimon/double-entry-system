@@ -7,6 +7,7 @@ import java.util.concurrent.CountDownLatch
 import scala.concurrent.duration.*
 import scala.concurrent.{Await, ExecutionContext, Future}
 
+import cats.data.NonEmptyVector
 import com.example.banking.domain.*
 import com.example.banking.infrastructure.InMemoryAccountRepository
 import com.example.banking.ledger.*
@@ -25,7 +26,7 @@ final class InMemoryLedgerRepositorySpec extends AnyFunSuite with Matchers:
     val result = LedgerTransaction.create(
       UUID.randomUUID(),
       BankingOperation.Deposit,
-      Vector(
+      NonEmptyVector.of(
         LedgerEntry(
           LedgerAccount.Customer(Account),
           LedgerDirection.Credit,
@@ -47,6 +48,26 @@ final class InMemoryLedgerRepositorySpec extends AnyFunSuite with Matchers:
     )
   }
 
+  test("ledger transaction rejects a single entry") {
+    val result = LedgerTransaction.create(
+      UUID.randomUUID(),
+      BankingOperation.Deposit,
+      NonEmptyVector.one(
+        LedgerEntry(
+          LedgerAccount.Customer(Account),
+          LedgerDirection.Credit,
+          TenBaht,
+          Currency.THB
+        )
+      ),
+      OccurredAt
+    )
+
+    result shouldBe Left(
+      LedgerError.InvalidTransaction("A ledger transaction requires at least two entries")
+    )
+  }
+
   test("business operations append balanced entries and derive the balance") {
     val (repository, operations) = createLedger()
 
@@ -64,6 +85,8 @@ final class InMemoryLedgerRepositorySpec extends AnyFunSuite with Matchers:
     requireRight(operations.find(Account)).balance shouldBe BigDecimal("6.50")
     repository.transactions should have size 2
     repository.transactions.foreach { transaction =>
+      transaction.entries.toVector should have size 2
+      transaction.entries.head.account shouldBe LedgerAccount.Customer(Account)
       val debitTotal = transaction.entries
         .filter(_.direction == LedgerDirection.Debit)
         .map(_.amount.amount)
@@ -96,7 +119,10 @@ final class InMemoryLedgerRepositorySpec extends AnyFunSuite with Matchers:
       OccurredAt.plusSeconds(3)
     ) shouldBe Left(LedgerError.TransactionAlreadyReversed(paymentId))
     repository.transactions should have size 3
-    repository.transactions.last.reversesTransactionId shouldBe Some(paymentId)
+    val originalPayment = repository.transactions(1)
+    val reversal = repository.transactions.last
+    reversal.reversesTransactionId shouldBe Some(paymentId)
+    reversal.entries shouldBe originalPayment.entries.map(_.reversed)
   }
 
   test("concurrent withdrawals cannot overdraw an account") {

@@ -3,6 +3,7 @@ package com.example.banking.ledger
 import java.time.Instant
 import java.util.UUID
 
+import cats.data.NonEmptyVector
 import com.example.banking.domain.*
 import com.example.banking.ports.{AccountOperations, AccountRepository}
 import com.example.domain.DomainError
@@ -106,7 +107,7 @@ final class LedgerBackedAccountOperations(
       transaction <- LedgerTransaction.create(
         transactionId,
         operation,
-        Vector(
+        NonEmptyVector.of(
           LedgerEntry(
             LedgerAccount.Customer(accountId),
             customerDirection,

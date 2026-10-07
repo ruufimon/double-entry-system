@@ -3,6 +3,7 @@ package com.example.banking.ledger
 import java.time.Instant
 import java.util.UUID
 
+import cats.data.NonEmptyVector
 import com.example.banking.domain.{AccountActivity, AccountId, BankingOperation, Currency, Money}
 import com.example.domain.DomainError
 
@@ -35,7 +36,7 @@ final case class LedgerEntry(
 final case class LedgerTransaction private (
     transactionId: UUID,
     operation: BankingOperation,
-    entries: Vector[LedgerEntry],
+    entries: NonEmptyVector[LedgerEntry],
     occurredAt: Instant,
     reversesTransactionId: Option[UUID]
 ) derives CanEqual
@@ -44,12 +45,13 @@ object LedgerTransaction:
   def create(
       transactionId: UUID,
       operation: BankingOperation,
-      entries: Vector[LedgerEntry],
+      entries: NonEmptyVector[LedgerEntry],
       occurredAt: Instant,
       reversesTransactionId: Option[UUID] = None
   ): Either[LedgerError, LedgerTransaction] =
-    val currencies = entries.map(_.currency).distinct
-    val customerEntryCount = entries.count {
+    val entryVector = entries.toVector
+    val currencies = entryVector.map(_.currency).distinct
+    val customerEntryCount = entryVector.count {
       case LedgerEntry(LedgerAccount.Customer(_), _, _, _) => true
       case _                                                => false
     }
@@ -60,7 +62,7 @@ object LedgerTransaction:
       case LedgerEntry(_, LedgerDirection.Credit, amount, _) => amount.amount
     }.sum
 
-    if entries.size < 2 then
+    if entryVector.size < 2 then
       Left(LedgerError.InvalidTransaction("A ledger transaction requires at least two entries"))
     else if customerEntryCount != 1 then
       Left(LedgerError.InvalidTransaction("A ledger transaction requires exactly one customer entry"))

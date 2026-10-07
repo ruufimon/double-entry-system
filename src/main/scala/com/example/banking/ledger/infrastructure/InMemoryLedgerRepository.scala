@@ -3,6 +3,8 @@ package com.example.banking.ledger.infrastructure
 import java.time.Instant
 import java.util.UUID
 
+import cats.data.State
+import cats.syntax.all.*
 import com.example.banking.domain.*
 import com.example.banking.ledger.*
 import com.example.domain.DomainError
@@ -85,27 +87,38 @@ final class InMemoryLedgerRepository extends LedgerRepository:
 
   private def activitiesOf(accountId: AccountId): Vector[AccountActivity] =
     val reversedTransactionIds = journal.flatMap(_.reversesTransactionId).toSet
-    var runningBalance = BigDecimal(0)
-    journal.flatMap { transaction =>
-      customerEntry(transaction, accountId).map { entry =>
-        runningBalance = applyEntry(runningBalance, entry)
-        AccountActivity(
-          transactionId = transaction.transactionId,
-          operation = transaction.operation,
-          effect = entry.direction match
-            case LedgerDirection.Credit => BalanceEffect.Increase
-            case LedgerDirection.Debit  => BalanceEffect.Decrease,
-          amount = entry.amount.amount,
-          currency = entry.currency,
-          balanceAfter = runningBalance,
-          occurredAt = transaction.occurredAt,
-          status =
-            if reversedTransactionIds.contains(transaction.transactionId) then
-              AccountActivityStatus.Reversed
-            else AccountActivityStatus.Posted,
-          originalTransactionId = transaction.reversesTransactionId
-        )
-      }
+    journal
+      .traverse(activityFor(accountId, reversedTransactionIds))
+      .runA(BigDecimal(0))
+      .value
+      .flatten
+
+  private def activityFor(
+      accountId: AccountId,
+      reversedTransactionIds: Set[UUID]
+  )(transaction: LedgerTransaction): State[BigDecimal, Option[AccountActivity]] =
+    State { runningBalance =>
+      customerEntry(transaction, accountId) match
+        case Some(entry) =>
+          val balanceAfter = applyEntry(runningBalance, entry)
+          val activity = AccountActivity(
+            transactionId = transaction.transactionId,
+            operation = transaction.operation,
+            effect = entry.direction match
+              case LedgerDirection.Credit => BalanceEffect.Increase
+              case LedgerDirection.Debit  => BalanceEffect.Decrease,
+            amount = entry.amount.amount,
+            currency = entry.currency,
+            balanceAfter = balanceAfter,
+            occurredAt = transaction.occurredAt,
+            status =
+              if reversedTransactionIds.contains(transaction.transactionId) then
+                AccountActivityStatus.Reversed
+              else AccountActivityStatus.Posted,
+            originalTransactionId = transaction.reversesTransactionId
+          )
+          balanceAfter -> Some(activity)
+        case None => runningBalance -> None
     }
 
   private def customerEntry(

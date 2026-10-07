@@ -139,6 +139,11 @@ final class InMemoryLedgerRepositorySpec extends AnyFunSuite with Matchers:
       BalanceEffect.Decrease,
       BalanceEffect.Increase
     )
+    activities.map(_.balanceAfter) shouldBe Vector(
+      BigDecimal("10.00"),
+      BigDecimal("0.00"),
+      BigDecimal("10.00")
+    )
     activities(1).status shouldBe AccountActivityStatus.Reversed
     activities(2).operation shouldBe BankingOperation.BillPaymentReversal
     activities(2).originalTransactionId shouldBe Some(paymentId)

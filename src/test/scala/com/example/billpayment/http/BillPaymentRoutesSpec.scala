@@ -114,6 +114,23 @@ final class BillPaymentRoutesSpec extends ScalatraFunSuite:
     }
   }
 
+  test("inquiry reports every invalid field") {
+    postJson(
+      "/accounts/invalid%20account/bill-payments/inquiries",
+      """{"billerCode":"invalid biller!","referenceCode1":"","referenceCode2":""}"""
+    ) {
+      status shouldBe 400
+      val response = parse(body)
+      (response \ "error").extract[String] shouldBe "invalid_bill_payment_inquiry"
+      (response \ "details" \ "error").extract[List[String]] shouldBe List(
+        "invalid_account_id",
+        "invalid_biller_code",
+        "invalid_biller_reference",
+        "invalid_biller_reference"
+      )
+    }
+  }
+
   test("payment status exposes an asynchronous account rejection") {
     val inquiryId = new AtomicReference[String]()
     val paymentId = new AtomicReference[String]()

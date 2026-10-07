@@ -17,6 +17,7 @@ when the backend restarts.
 - Customer-facing account activity history
 - Two-step bill payment inquiry and confirmation
 - Internal message bus for account charging, settlement, reversal, and auditing
+- Cats-powered validation that reports all invalid bill-inquiry fields together
 - Angular account dashboard and operation flows
 - Scala unit and HTTP tests, Angular unit tests, and Playwright E2E coverage
 
@@ -38,6 +39,7 @@ See [spec/LedgerFlow.md](spec/LedgerFlow.md) for the detailed flow diagram.
 ## Technology
 
 - Scala 3.3.8
+- Cats 2.13.0
 - Scalatra 3.2.1 and Jetty 12
 - sbt 2.0.9
 - Angular 22

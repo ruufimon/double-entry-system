@@ -41,6 +41,22 @@ final class BillPaymentServiceSpec extends AnyFunSuite with Matchers:
     result.inquiry.expiresAt shouldBe StartTime.plusSeconds(300)
   }
 
+  test("inquiry accumulates independent validation errors") {
+    val fixture = createFixture()
+
+    val result = fixture.service.inquire("", "invalid biller!", "", "x" * 129)
+
+    result match
+      case Left(BillPaymentError.InvalidInquiry(errors)) =>
+        errors.toList.map(_.code) shouldBe List(
+          "invalid_account_id",
+          "invalid_biller_code",
+          "invalid_biller_reference",
+          "invalid_biller_reference"
+        )
+      case other => fail(s"Expected accumulated validation errors, got $other")
+  }
+
   test("confirmation returns acceptance before background settlement completes") {
     val delegateGateway = createBillerGateway()
     val settlementStarted = new CountDownLatch(1)

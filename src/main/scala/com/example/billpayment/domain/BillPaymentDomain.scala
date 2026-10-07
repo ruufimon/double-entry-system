@@ -5,6 +5,7 @@ import java.util.UUID
 
 import scala.util.Try
 
+import cats.data.NonEmptyList
 import com.example.banking.domain.{AccountId, DomainEvent, Money}
 import com.example.domain.DomainError
 
@@ -22,6 +23,11 @@ enum BillPaymentError(val code: String, val message: String)
       extends BillPaymentError(
         "invalid_biller_reference",
         s"$fieldName must contain 1 to 128 characters"
+      )
+  case InvalidInquiry(errors: NonEmptyList[DomainError])
+      extends BillPaymentError(
+        "invalid_bill_payment_inquiry",
+        errors.toList.map(_.message).mkString("; ")
       )
   case InvalidInquiryId
       extends BillPaymentError(

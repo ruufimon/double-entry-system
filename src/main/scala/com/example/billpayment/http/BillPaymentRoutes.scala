@@ -54,6 +54,12 @@ final case class BillPaymentStatusResponse(
 )
 
 final case class BillPaymentErrorResponse(error: String, message: String)
+final case class BillPaymentValidationIssue(error: String, message: String)
+final case class BillPaymentValidationErrorResponse(
+    error: String,
+    message: String,
+    details: List[BillPaymentValidationIssue]
+)
 
 trait BillPaymentRoutes:
   self: ScalatraServlet & JacksonJsonSupport =>
@@ -130,7 +136,14 @@ trait BillPaymentRoutes:
         responseBody
       case Left(domainError) =>
         status = errorStatus(domainError)
-        BillPaymentErrorResponse(domainError.code, domainError.message)
+        domainError match
+          case BillPaymentError.InvalidInquiry(errors) =>
+            BillPaymentValidationErrorResponse(
+              domainError.code,
+              domainError.message,
+              errors.toList.map(error => BillPaymentValidationIssue(error.code, error.message))
+            )
+          case _ => BillPaymentErrorResponse(domainError.code, domainError.message)
 
   private def toStatusResponse(process: BillPaymentProcess): BillPaymentStatusResponse =
     BillPaymentStatusResponse(

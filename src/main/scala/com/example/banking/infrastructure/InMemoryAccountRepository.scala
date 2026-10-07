@@ -17,3 +17,9 @@ final class InMemoryAccountRepository extends AccountRepository:
     if accountIds.contains(accountId) then Right(Account(accountId, BigDecimal(0)))
     else Left(BankingError.AccountNotFound(accountId.value))
   }
+
+  override def all: Vector[Account] = synchronized {
+    accountIds.toVector
+      .sortBy(_.value)
+      .map(Account(_, BigDecimal(0)))
+  }

@@ -19,6 +19,7 @@ when the backend restarts.
 - Internal message bus for account charging, settlement, reversal, and auditing
 - Cats-powered validation, non-empty ledger entries, and immutable balance transitions
 - Angular account dashboard and operation flows
+- Standalone read-only Angular admin console for account operations
 - Scala unit and HTTP tests, Angular unit tests, and Playwright E2E coverage
 
 ## Architecture
@@ -75,6 +76,17 @@ bun run start
 Open `http://localhost:4200`. During development, Angular proxies requests under
 `/api` to the backend on port 8080.
 
+Run the independent admin console in a third terminal:
+
+```bash
+cd admin-ui
+bun install
+bun run start --host localhost --port 4300
+```
+
+Open `http://localhost:4300`. This educational admin console is read-only and
+has no authentication; do not expose it to untrusted networks.
+
 ## API
 
 | Method | Endpoint | Description |
@@ -89,6 +101,8 @@ Open `http://localhost:4200`. During development, Angular proxies requests under
 | `POST` | `/accounts/:accountId/bill-payments/inquiries` | Retrieve the current bill debt |
 | `POST` | `/accounts/:accountId/bill-payments/:inquiryId/confirm` | Start payment processing |
 | `GET` | `/accounts/:accountId/bill-payments/:paymentId` | Read payment status |
+| `GET` | `/admin/accounts` | List operational summaries for every account |
+| `GET` | `/admin/accounts/:accountId` | Read complete operational account activity |
 
 Account IDs may contain 1–64 letters, numbers, underscores, or hyphens. Monetary
 amounts must be positive and have no more than two decimal places.
@@ -163,6 +177,15 @@ bun run test
 bun run build
 ```
 
+Run the same checks for the standalone admin application:
+
+```bash
+cd admin-ui
+bun run test
+bun run build
+bun run e2e
+```
+
 Use `bun run test`, not `bun test`: the latter runs Bun's own test runner
 instead of the Angular (Vitest) tests.
 
@@ -179,12 +202,14 @@ already running.
 
 ## Deploy
 
-The repository includes a [Render Blueprint](render.yaml) with two services:
+The repository includes a [Render Blueprint](render.yaml) with three services:
 
 - `banking-api`: the Scalatra API, built as a GraalVM native image from
   [`Dockerfile.native`](Dockerfile.native)
 - `banking-ui`: the Angular build, served as a static site. It rewrites `/api/*`
   to the API and all other paths to `index.html`.
+- `banking-admin-ui`: the independent read-only admin build with the same API
+  proxy and single-page application rewrites.
 
 To deploy, open the Render dashboard, choose **New → Blueprint**, and select
 this repository. Both services redeploy on every push to `main`. If Render
@@ -196,8 +221,8 @@ every deploy or restart to reset accounts and ledger entries.
 
 ### Docker
 
-Run the API and UI together with Docker Compose, then open
-`http://localhost:4200`:
+Run the API and both UIs with Docker Compose. Open the customer application at
+`http://localhost:4200` and the admin console at `http://localhost:4300`:
 
 ```bash
 docker compose up --build
@@ -216,9 +241,16 @@ docker build -f Dockerfile.ui -t banking-ui .
 docker run --rm -p 4200:8080 -e API_URL=http://host.docker.internal:8080 banking-ui
 ```
 
+Build and run the admin image independently in the same way:
+
+```bash
+docker build -f Dockerfile.admin-ui -t banking-admin-ui .
+docker run --rm -p 4300:8080 -e API_URL=http://host.docker.internal:8080 banking-admin-ui
+```
+
 ### Railway
 
-Create two services from this repository and set these variables:
+Create three services from this repository and set these variables:
 
 | Service | Variable | Value |
 | --- | --- | --- |
@@ -226,10 +258,12 @@ Create two services from this repository and set these variables:
 | API | `PORT` | `8080` |
 | UI | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.ui` |
 | UI | `API_URL` | `http://${{API.RAILWAY_PRIVATE_DOMAIN}}:8080` |
+| Admin UI | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.admin-ui` |
+| Admin UI | `API_URL` | `http://${{API.RAILWAY_PRIVATE_DOMAIN}}:8080` |
 
 Replace `API` in the reference variable with the API service's name in Railway.
-Generate a public domain for the UI service only; the API stays on Railway's
-private network. If the UI cannot reach the API privately, generate a public
+Generate public domains for the UI services only; the API stays on Railway's
+private network. If either UI cannot reach the API privately, generate a public
 domain for the API too and set `API_URL` to that `https://` URL instead.
 
 ### Native API image (GraalVM)
@@ -272,6 +306,7 @@ src/main/scala/com/example/banking/      Account, ledger, messaging, and HTTP co
 src/main/scala/com/example/billpayment/  Bill-payment workflow and biller adapter
 src/test/scala/                          Backend tests
 ui/                                     Angular application and Playwright tests
+admin-ui/                               Standalone Angular admin application
 spec/                                   Architecture documentation
 ```
 

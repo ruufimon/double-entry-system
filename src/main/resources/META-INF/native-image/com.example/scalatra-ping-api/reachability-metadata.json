@@ -234,6 +234,88 @@
       ]
     },
     {
+      "type": "com.example.banking.http.AdminAccountDetailResponse",
+      "fields": [
+        {
+          "name": "accountId"
+        },
+        {
+          "name": "activities"
+        },
+        {
+          "name": "activityCount"
+        },
+        {
+          "name": "balance"
+        },
+        {
+          "name": "currency"
+        },
+        {
+          "name": "lastActivityAt"
+        },
+        {
+          "name": "status"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AdminAccountDetailResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AdminAccountSummaryResponse",
+      "fields": [
+        {
+          "name": "accountId"
+        },
+        {
+          "name": "activityCount"
+        },
+        {
+          "name": "balance"
+        },
+        {
+          "name": "currency"
+        },
+        {
+          "name": "lastActivityAt"
+        },
+        {
+          "name": "status"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AdminAccountSummaryResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AdminServlet",
+      "fields": [
+        {
+          "name": "jsonFormats$lzy1"
+        },
+        {
+          "name": "org$json4s$jackson$JsonMethods$$_defaultMapper$lzy1"
+        },
+        {
+          "name": "routes$lzy1"
+        },
+        {
+          "name": "xmlRootNode$lzy1"
+        }
+      ]
+    },
+    {
       "type": "com.example.banking.http.BankingServlet",
       "fields": [
         {

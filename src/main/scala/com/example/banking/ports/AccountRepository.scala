@@ -6,3 +6,4 @@ import com.example.domain.DomainError
 trait AccountRepository:
   def open(accountId: AccountId): AccountOpening
   def find(accountId: AccountId): Either[DomainError, Account]
+  def all: Vector[Account]

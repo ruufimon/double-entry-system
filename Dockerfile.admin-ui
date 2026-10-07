@@ -1,0 +1,18 @@
+# Builds the standalone Angular admin UI and serves it with nginx.
+# Build from the repository root: docker build -f Dockerfile.admin-ui -t banking-admin-ui .
+
+FROM node:24-slim AS build
+COPY --from=oven/bun:1.3.14-slim /usr/local/bin/bun /usr/local/bin/bun
+WORKDIR /app
+COPY admin-ui/package.json admin-ui/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY admin-ui/ .
+RUN bun run build
+
+FROM nginxinc/nginx-unprivileged:1.29-alpine
+ENV API_URL=http://api:8080
+ENV PORT=8080
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+COPY admin-ui/nginx/default.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=build /app/dist/banking-admin-ui/browser /usr/share/nginx/html
+EXPOSE 8080

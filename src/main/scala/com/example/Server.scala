@@ -10,7 +10,7 @@ import com.example.banking.application.{
   DepositService,
   WithdrawService
 }
-import com.example.banking.http.BankingServlet
+import com.example.banking.http.{AdminServlet, BankingServlet}
 import com.example.banking.infrastructure.{
   InMemoryAccountRepository,
   InMemoryAuditLogRepository,
@@ -98,6 +98,10 @@ object Server:
         )
       ),
       "/accounts/*"
+    )
+    context.addServlet(
+      new ServletHolder(new AdminServlet(accountOperations)),
+      "/admin/*"
     )
     server.setHandler(context)
 

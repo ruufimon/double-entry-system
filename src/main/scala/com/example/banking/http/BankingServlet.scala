@@ -3,15 +3,7 @@ package com.example.banking.http
 import scala.util.control.NonFatal
 
 import com.example.banking.application.{AccountService, DepositService, WithdrawService}
-import com.example.banking.domain.{
-  AccountActivity,
-  AccountActivityStatus,
-  AccountId,
-  BalanceEffect,
-  BankingError,
-  BankingOperation,
-  Currency
-}
+import com.example.banking.domain.{AccountId, BankingError, Currency}
 import com.example.banking.ledger.LedgerError
 import com.example.banking.ports.AccountOperations
 import com.example.billpayment.application.BillPaymentService
@@ -130,7 +122,7 @@ final class BankingServlet(
       accountId = overview.account.id.value,
       currency = Currency.THB.code,
       balance = overview.account.balance,
-      activities = overview.activities.map(toActivityResponse)
+      activities = overview.activities.map(AccountResponseMapping.toActivityResponse)
     )
 
     respond(result)
@@ -140,7 +132,7 @@ final class BankingServlet(
     val result = for
       accountId <- AccountId.from(params("accountId"))
       activities <- accountOperations.activities(accountId)
-    yield activities.map(toActivityResponse)
+    yield activities.map(AccountResponseMapping.toActivityResponse)
 
     respond(result)
   }
@@ -173,27 +165,6 @@ final class BankingServlet(
       case Left(error) =>
         status = errorStatus(error)
         ErrorResponse(error.code, error.message)
-
-  private def toActivityResponse(activity: AccountActivity): AccountActivityResponse =
-    AccountActivityResponse(
-      transactionId = activity.transactionId.toString,
-      operation = activity.operation match
-        case BankingOperation.Deposit     => "deposit"
-        case BankingOperation.Withdrawal  => "withdrawal"
-        case BankingOperation.BillPayment => "bill_payment"
-        case BankingOperation.BillPaymentReversal => "bill_payment_reversal",
-      effect = activity.effect match
-        case BalanceEffect.Increase => "increase"
-        case BalanceEffect.Decrease => "decrease",
-      amount = activity.amount,
-      currency = activity.currency.code,
-      balanceAfter = activity.balanceAfter,
-      occurredAt = activity.occurredAt.toString,
-      status = activity.status match
-        case AccountActivityStatus.Posted   => "posted"
-        case AccountActivityStatus.Reversed => "reversed",
-      originalTransactionId = activity.originalTransactionId.map(_.toString)
-    )
 
   private def errorStatus(error: DomainError): Int =
     error match

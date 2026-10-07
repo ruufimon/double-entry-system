@@ -1,0 +1,8 @@
+# Used instead of .dockerignore when building Dockerfile.admin-ui.
+*
+!admin-ui/
+admin-ui/node_modules
+admin-ui/dist
+admin-ui/.angular
+admin-ui/test-results
+admin-ui/playwright-report

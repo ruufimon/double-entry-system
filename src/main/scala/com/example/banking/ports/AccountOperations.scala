@@ -20,6 +20,8 @@ trait AccountOperations:
 
   def overview(accountId: AccountId): Either[DomainError, AccountOverview]
 
+  def allOverviews: Vector[AccountOverview]
+
   def deposit(
       transactionId: UUID,
       accountId: AccountId,

@@ -21,13 +21,10 @@ final class LedgerBackedAccountOperations(
       .map(account => account.copy(balance = ledgerRepository.balance(accountId)))
 
   override def overview(accountId: AccountId): Either[DomainError, AccountOverview] =
-    accountRepository.find(accountId).map { account =>
-      val snapshot = ledgerRepository.snapshot(accountId)
-      AccountOverview(
-        account = account.copy(balance = snapshot.balance),
-        activities = snapshot.activities
-      )
-    }
+    accountRepository.find(accountId).map(toOverview)
+
+  override def allOverviews: Vector[AccountOverview] =
+    accountRepository.all.map(toOverview)
 
   override def deposit(
       transactionId: UUID,
@@ -120,3 +117,10 @@ final class LedgerBackedAccountOperations(
       )
       account <- ledgerRepository.post(transaction)
     yield account
+
+  private def toOverview(account: Account): AccountOverview =
+    val snapshot = ledgerRepository.snapshot(account.id)
+    AccountOverview(
+      account = account.copy(balance = snapshot.balance),
+      activities = snapshot.activities
+    )

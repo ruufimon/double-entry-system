@@ -1,4 +1,4 @@
-# Runs the API and UI together: open http://localhost:4200
+# Runs the API, customer UI, and admin UI together.
 services:
   api:
     build:
@@ -18,5 +18,18 @@ services:
     depends_on:
       # The distroless native image has no shell or curl for a health check,
       # and it starts in milliseconds.
+      api:
+        condition: service_started
+
+  admin-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin-ui
+    image: banking-admin-ui:local
+    environment:
+      API_URL: http://api:8080
+    ports:
+      - "4300:8080"
+    depends_on:
       api:
         condition: service_started

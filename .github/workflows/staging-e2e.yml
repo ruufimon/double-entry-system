@@ -6,10 +6,12 @@ on:
       customer_url:
         description: Public Railway URL for the customer UI
         required: true
+        default: https://ui-pre-production-8a8b.up.railway.app
         type: string
       admin_url:
         description: Public Railway URL for the admin UI
         required: true
+        default: https://admin-ui-pre-production-8a8b.up.railway.app
         type: string
       include_bill_payment:
         description: Run the single-use demo bill lifecycle (requires a freshly restarted staging API)
@@ -31,7 +33,7 @@ jobs:
     timeout-minutes: 15
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - name: Set up Bun
       uses: oven-sh/setup-bun@v2
       with:
@@ -56,7 +58,7 @@ jobs:
       run: bun run e2e
     - name: Upload Playwright failure artifacts
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: customer-ui-staging-playwright-results
         path: ui/test-results
@@ -70,7 +72,7 @@ jobs:
     needs: customer-e2e
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - name: Set up Bun
       uses: oven-sh/setup-bun@v2
       with:
@@ -88,7 +90,7 @@ jobs:
       run: bun run e2e
     - name: Upload Playwright failure artifacts
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: admin-ui-staging-playwright-results
         path: admin-ui/test-results

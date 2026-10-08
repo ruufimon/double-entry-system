@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   build:
+    name: Backend Unit Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -31,6 +32,27 @@ jobs:
     - name: Run tests
       run: sbt test
       # Optional: This step uploads information to the GitHub dependency graph and unblocking Dependabot alerts for the repository
+
+  ui-unit:
+    name: ${{ matrix.app }} Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [ui, admin-ui]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: '1.3.14'
+    - name: Install dependencies
+      working-directory: ${{ matrix.app }}
+      run: bun install --frozen-lockfile
+    - name: Run unit tests
+      working-directory: ${{ matrix.app }}
+      run: bun run test
 
   admin-e2e:
     name: Admin UI E2E

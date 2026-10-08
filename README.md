@@ -200,6 +200,20 @@ bun run e2e
 Playwright starts the backend and frontend automatically when they are not
 already running.
 
+To verify a deployed Railway environment, open **Actions → Staging E2E → Run
+workflow** and enter the public customer and admin UI URLs. The workflow sends
+all API traffic through each deployed UI's `/api` proxy and creates temporary
+in-memory test accounts in staging. It skips the single-use demo bill tests by
+default so repeated checks remain reliable. Enable **include_bill_payment**
+only immediately after restarting or redeploying the staging API.
+
+The same deployed-URL mode is available locally:
+
+```bash
+cd ui
+E2E_BASE_URL=https://customer-staging.example.com bun run e2e
+```
+
 ## Deploy
 
 The repository includes a [Render Blueprint](render.yaml) with three services:

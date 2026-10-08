@@ -1,17 +1,20 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const remoteBaseUrl = process.env['E2E_BASE_URL']?.replace(/\/+$/, '');
+const localBaseUrl = 'http://localhost:4300';
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   forbidOnly: Boolean(process.env['CI']),
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:4300',
+    baseURL: remoteBaseUrl ?? localBaseUrl,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: [
+  webServer: remoteBaseUrl ? undefined : [
     {
       name: 'Scalatra API',
       command: 'sbt run',
@@ -24,7 +27,7 @@ export default defineConfig({
       name: 'Angular Admin UI',
       command:
         './node_modules/.bin/ng serve --proxy-config proxy.conf.json --host localhost --port 4300',
-      url: 'http://localhost:4300',
+      url: localBaseUrl,
       reuseExistingServer: !process.env['CI'],
       timeout: 120_000,
     },

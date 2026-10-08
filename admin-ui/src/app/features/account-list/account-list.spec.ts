@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 
 import { AdminAccountSummary } from '../../core/api/admin-api.models';
 import { AccountList } from './account-list';
@@ -57,6 +57,31 @@ describe('AccountList', () => {
     const rows = fixture.nativeElement.querySelectorAll('tbody tr');
     expect(rows).toHaveLength(1);
     expect(rows[0].textContent).toContain('beta-account');
+  });
+
+  it('opens a specific valid account ID directly', () => {
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const fixture = TestBed.createComponent(AccountList);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController).expectOne('/api/admin/accounts').flush(accounts);
+
+    fixture.componentInstance.specificAccountId.set('  alpha-account  ');
+    fixture.componentInstance.viewSpecificAccount();
+
+    expect(navigate).toHaveBeenCalledWith(['/accounts', 'alpha-account']);
+  });
+
+  it('keeps direct lookup disabled for an invalid account ID', () => {
+    const fixture = TestBed.createComponent(AccountList);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController).expectOne('/api/admin/accounts').flush(accounts);
+    fixture.componentInstance.specificAccountId.set('not valid!');
+    fixture.detectChanges();
+
+    const button = fixture.nativeElement.querySelector('.account-lookup button');
+    expect(button.disabled).toBe(true);
+    expect(fixture.nativeElement.textContent).toContain('Use 1–64 letters');
   });
 
   it('renders an empty account directory', () => {

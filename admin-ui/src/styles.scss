@@ -58,6 +58,16 @@ a { color: inherit; }
 .metric-card strong { margin: 7px 0 4px; font-size: clamp(1.8rem, 4vw, 2.8rem); letter-spacing: -.05em; }
 .metric-card .status-value { color: var(--forest-light); text-transform: capitalize; }
 
+.account-lookup { display: grid; grid-template-columns: minmax(250px, .8fr) minmax(360px, 1.2fr); align-items: end; gap: 36px; margin-top: 22px; padding: 25px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.72); }
+.account-lookup h2 { margin: 0; font-size: 1.35rem; letter-spacing: -.035em; }
+.account-lookup p:not(.eyebrow) { margin: 8px 0 0; color: var(--muted); font-size: .8rem; }
+.account-lookup form label { display: block; margin-bottom: 7px; color: var(--muted); font-size: .72rem; font-weight: 800; }
+.lookup-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; }
+.lookup-controls input { width: 100%; min-height: 46px; padding: 0 13px; border: 1px solid var(--line); border-radius: 9px; outline: none; background: #fff; }
+.lookup-controls input:focus { border-color: var(--forest-light); box-shadow: 0 0 0 3px rgba(36,97,81,.12); }
+.button-primary { color: #fff; background: var(--forest); }
+.field-error { display: block; margin-top: 7px; color: var(--red); font-size: .72rem; }
+
 .data-section { margin-top: 54px; }
 .data-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 17px; }
 .data-toolbar h2 { margin: 0; font-size: 1.55rem; letter-spacing: -.04em; }
@@ -101,6 +111,7 @@ tbody tr:hover { background: #fafbf8; }
 @media (max-width: 850px) {
   .metric-grid.detail-metrics { grid-template-columns: 1fr; }
   .metric-grid.detail-metrics .metric-card { min-height: 130px; }
+  .account-lookup { grid-template-columns: 1fr; gap: 20px; }
 }
 @media (max-width: 620px) {
   .site-header, .site-footer, .page-shell, .security-banner { width: min(100% - 24px, 1320px); }
@@ -112,6 +123,7 @@ tbody tr:hover { background: #fafbf8; }
   .metric-grid { grid-template-columns: 1fr; }
   .metric-card { min-height: 135px; }
   .search-field { width: 100%; }
+  .lookup-controls { grid-template-columns: 1fr; }
   .notice { align-items: stretch; flex-direction: column; }
 }
 @media (prefers-reduced-motion: reduce) {

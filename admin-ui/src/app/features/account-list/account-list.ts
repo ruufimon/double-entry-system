@@ -1,7 +1,7 @@
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { AdminAccountSummary } from '../../core/api/admin-api.models';
 import { AdminApiService } from '../../core/api/admin-api.service';
@@ -25,6 +25,34 @@ import { ApiError, toApiError } from '../../core/api/api-error';
         <button class="button button-quiet" type="button" (click)="loadAccounts()">Try again</button>
       </div>
     }
+
+    <section class="account-lookup" aria-labelledby="account-lookup-title">
+      <div>
+        <p class="eyebrow">Direct lookup</p>
+        <h2 id="account-lookup-title">View a specific account</h2>
+        <p>Open an account directly when you already know its exact ID.</p>
+      </div>
+      <form (ngSubmit)="viewSpecificAccount()">
+        <label for="specific-account-id">Account ID to view</label>
+        <div class="lookup-controls">
+          <input
+            id="specific-account-id"
+            name="specificAccountId"
+            type="text"
+            autocomplete="off"
+            placeholder="e.g. account-123"
+            [ngModel]="specificAccountId()"
+            (ngModelChange)="specificAccountId.set($event)"
+          >
+          <button class="button button-primary" type="submit" [disabled]="!specificAccountIdValid()">
+            Open account <span aria-hidden="true">→</span>
+          </button>
+        </div>
+        @if (specificAccountId().length > 0 && !specificAccountIdValid()) {
+          <span class="field-error">Use 1–64 letters, numbers, underscores, or hyphens.</span>
+        }
+      </form>
+    </section>
 
     @if (loading()) {
       <div class="metric-grid" aria-hidden="true">
@@ -80,9 +108,11 @@ import { ApiError, toApiError } from '../../core/api/api-error';
 })
 export class AccountList implements OnInit {
   private readonly api = inject(AdminApiService);
+  private readonly router = inject(Router);
 
   readonly accounts = signal<readonly AdminAccountSummary[]>([]);
   readonly query = signal('');
+  readonly specificAccountId = signal('');
   readonly loading = signal(true);
   readonly refreshing = signal(false);
   readonly loaded = signal(false);
@@ -98,6 +128,9 @@ export class AccountList implements OnInit {
   });
   readonly totalBalance = computed(() =>
     this.accounts().reduce((total, account) => total + account.balance, 0),
+  );
+  readonly specificAccountIdValid = computed(() =>
+    /^[A-Za-z0-9_-]{1,64}$/.test(this.specificAccountId().trim()),
   );
 
   ngOnInit(): void {
@@ -131,5 +164,12 @@ export class AccountList implements OnInit {
         }
       },
     });
+  }
+
+  viewSpecificAccount(): void {
+    if (!this.specificAccountIdValid()) {
+      return;
+    }
+    void this.router.navigate(['/accounts', this.specificAccountId().trim()]);
   }
 }

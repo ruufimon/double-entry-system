@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('searches accounts and opens complete operational detail', async ({ page, request }, testInfo) => {
+test('lists accounts and opens complete operational detail', async ({ page, request }, testInfo) => {
   const accountId = `admin-e2e-${Date.now()}-${testInfo.workerIndex}-${testInfo.retry}`;
   const created = await request.put(`/api/accounts/${accountId}`, { data: {} });
   expect(created.ok()).toBe(true);
@@ -15,7 +15,6 @@ test('searches accounts and opens complete operational detail', async ({ page, r
 
   await page.goto('/accounts');
   await expect(page.getByText('Unauthenticated demo admin')).toBeVisible();
-  await page.getByLabel('Search account ID').fill(accountId.toUpperCase());
 
   const row = page.getByRole('row').filter({ hasText: accountId });
   await expect(row).toContainText('฿100.00');
@@ -38,7 +37,7 @@ test('opens a specific account directly by ID', async ({ page, request }, testIn
 
   await page.goto('/accounts');
   await page.getByLabel('Account ID to view').fill(accountId);
-  await page.getByRole('button', { name: 'Open account' }).click();
+  await page.getByRole('button', { name: 'View Detail' }).click();
 
   await expect(page).toHaveURL(`/accounts/${accountId}`);
   await expect(page.getByRole('heading', { name: accountId })).toBeVisible();

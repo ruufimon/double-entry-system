@@ -52,7 +52,7 @@ import { ApiError, toApiError } from '../../core/api/api-error';
         } @else {
           <div class="table-card table-scroll">
             <table class="activity-table">
-              <thead><tr><th>Occurred</th><th>Operation</th><th>Transaction ID</th><th>Effect</th><th>Amount</th><th>Balance after</th><th>Status</th><th>Original transaction</th></tr></thead>
+              <thead><tr><th>Occurred</th><th>Operation</th><th>Transaction ID</th><th>Effect</th><th class="numeric">Amount</th><th class="numeric">Balance after</th><th>Status</th><th>Original transaction</th></tr></thead>
               <tbody>
                 @for (activity of activities(); track activity.transactionId) {
                   <tr [class.reversed-row]="activity.status === 'reversed'">

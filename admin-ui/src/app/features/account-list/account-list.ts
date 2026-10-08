@@ -26,34 +26,6 @@ import { ApiError, toApiError } from '../../core/api/api-error';
       </div>
     }
 
-    <section class="account-lookup" aria-labelledby="account-lookup-title">
-      <div>
-        <p class="eyebrow">Direct lookup</p>
-        <h2 id="account-lookup-title">View a specific account</h2>
-        <p>Open an account directly when you already know its exact ID.</p>
-      </div>
-      <form (ngSubmit)="viewSpecificAccount()">
-        <label for="specific-account-id">Account ID to view</label>
-        <div class="lookup-controls">
-          <input
-            id="specific-account-id"
-            name="specificAccountId"
-            type="text"
-            autocomplete="off"
-            placeholder="e.g. account-123"
-            [ngModel]="specificAccountId()"
-            (ngModelChange)="specificAccountId.set($event)"
-          >
-          <button class="button button-primary" type="submit" [disabled]="!specificAccountIdValid()">
-            Open account <span aria-hidden="true">→</span>
-          </button>
-        </div>
-        @if (specificAccountId().length > 0 && !specificAccountIdValid()) {
-          <span class="field-error">Use 1–64 letters, numbers, underscores, or hyphens.</span>
-        }
-      </form>
-    </section>
-
     @if (loading()) {
       <div class="metric-grid" aria-hidden="true">
         <div class="metric-card skeleton"></div><div class="metric-card skeleton"></div>
@@ -70,15 +42,35 @@ import { ApiError, toApiError } from '../../core/api/api-error';
         <article class="metric-card accent"><span>Aggregate balance</span><strong>{{ totalBalance() | currency:'THB':'symbol-narrow':'1.2-2' }}</strong><small>Ledger-derived THB</small></article>
       </section>
 
-      <section class="data-section">
-        <div class="data-toolbar">
-          <div><p class="eyebrow">Directory</p><h2>Account records</h2></div>
-          <label class="search-field">
-            <span>Search account ID</span>
-            <input type="search" placeholder="e.g. account-123" [ngModel]="query()" (ngModelChange)="query.set($event)">
-          </label>
+      <section class="account-lookup" aria-labelledby="account-lookup-title">
+        <div>
+          <p class="eyebrow">Direct lookup</p>
+          <h2 id="account-lookup-title">View a specific account</h2>
+          <p>Open an account directly when you already know its exact ID.</p>
         </div>
+        <form (ngSubmit)="viewSpecificAccount()">
+          <label for="specific-account-id">Account ID to view</label>
+          <div class="lookup-controls">
+            <input
+              id="specific-account-id"
+              name="specificAccountId"
+              type="text"
+              autocomplete="off"
+              placeholder="e.g. account-123"
+              [ngModel]="specificAccountId()"
+              (ngModelChange)="specificAccountId.set($event)"
+            >
+            <button class="button button-primary" type="submit" [disabled]="!specificAccountIdValid()">
+              View Detail <span aria-hidden="true">→</span>
+            </button>
+          </div>
+          @if (specificAccountId().length > 0 && !specificAccountIdValid()) {
+            <span class="field-error">Use 1–64 letters, numbers, underscores, or hyphens.</span>
+          }
+        </form>
+      </section>      
 
+      <section class="data-section">
         @if (accounts().length === 0) {
           <div class="table-card empty-state"><strong>No accounts yet</strong><span>Accounts appear here after they are opened.</span></div>
         } @else if (filteredAccounts().length === 0) {
@@ -86,7 +78,7 @@ import { ApiError, toApiError } from '../../core/api/api-error';
         } @else {
           <div class="table-card table-scroll">
             <table>
-              <thead><tr><th>Account ID</th><th>Status</th><th>Balance</th><th>Activity</th><th>Latest activity</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+              <thead><tr><th>Account ID</th><th>Status</th><th class="numeric">Balance</th><th>Activity</th><th>Latest activity</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
               <tbody>
                 @for (account of filteredAccounts(); track account.accountId) {
                   <tr>

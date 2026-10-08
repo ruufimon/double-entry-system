@@ -31,6 +31,8 @@ jobs:
     name: Customer UI Staging E2E
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      E2E_BASE_URL: ${{ inputs.customer_url }}
 
     steps:
     - uses: actions/checkout@v5
@@ -47,14 +49,10 @@ jobs:
     - name: Run repeatable customer UI E2E against staging
       if: ${{ !inputs.include_bill_payment }}
       working-directory: ui
-      env:
-        E2E_BASE_URL: ${{ inputs.customer_url }}
       run: bun run e2e -- --grep-invert bill
     - name: Run complete customer UI E2E against fresh staging
       if: ${{ inputs.include_bill_payment }}
       working-directory: ui
-      env:
-        E2E_BASE_URL: ${{ inputs.customer_url }}
       run: bun run e2e
     - name: Upload Playwright failure artifacts
       if: failure()
@@ -70,6 +68,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: customer-e2e
+    env:
+      E2E_BASE_URL: ${{ inputs.admin_url }}
 
     steps:
     - uses: actions/checkout@v5
@@ -85,8 +85,6 @@ jobs:
       run: bunx playwright install --with-deps chromium
     - name: Run admin UI E2E against staging
       working-directory: admin-ui
-      env:
-        E2E_BASE_URL: ${{ inputs.admin_url }}
       run: bun run e2e
     - name: Upload Playwright failure artifacts
       if: failure()

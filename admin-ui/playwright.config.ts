@@ -1,6 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const remoteBaseUrl = process.env['E2E_BASE_URL']?.replace(/\/+$/, '');
+const stagingUrl = process.env['E2E_BASE_URL']?.trim().replace(/\/+$/, '');
+const remoteBaseUrl = stagingUrl
+  ? /^https?:\/\//i.test(stagingUrl)
+    ? stagingUrl
+    : `https://${stagingUrl}${stagingUrl.includes('.') ? '' : '.up.railway.app'}`
+  : undefined;
 const localBaseUrl = 'http://localhost:4300';
 
 export default defineConfig({

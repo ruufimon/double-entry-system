@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build:
-    name: Backend Unit Tests
+    name: Backend Tests
     runs-on: ubuntu-latest
 
     steps:

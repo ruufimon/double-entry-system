@@ -9,7 +9,8 @@ import com.example.banking.domain.{
   AccountId,
   AccountOpening,
   AccountOverview,
-  Money
+  Money,
+  TransferAccounts
 }
 import com.example.domain.DomainError
 
@@ -35,6 +36,14 @@ trait AccountOperations:
       amount: Money,
       occurredAt: Instant
   ): Either[DomainError, Account]
+
+  def transfer(
+      transactionId: UUID,
+      sourceAccountId: AccountId,
+      destinationAccountId: AccountId,
+      amount: Money,
+      occurredAt: Instant
+  ): Either[DomainError, TransferAccounts]
 
   def chargeForBillPayment(
       transactionId: UUID,

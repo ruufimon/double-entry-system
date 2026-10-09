@@ -8,6 +8,7 @@ import com.example.banking.application.{
   AccountService,
   AuditLogService,
   DepositService,
+  TransferService,
   WithdrawService
 }
 import com.example.banking.http.{AdminServlet, BankingServlet}
@@ -91,6 +92,12 @@ object Server:
       Clock.systemUTC(),
       () => UUID.randomUUID()
     )
+    val transferService = new TransferService(
+      accountOperations,
+      messageBus,
+      Clock.systemUTC(),
+      () => UUID.randomUUID()
+    )
     val billPaymentService = new BillPaymentService(
       billerGateway,
       inquiryRepository,
@@ -119,6 +126,7 @@ object Server:
           accountService,
           depositService,
           withdrawService,
+          transferService,
           billPaymentService,
           accountOperations
         )

@@ -52,12 +52,13 @@ import { ApiError, toApiError } from '../../core/api/api-error';
         } @else {
           <div class="table-card table-scroll">
             <table class="activity-table">
-              <thead><tr><th>Occurred</th><th>Operation</th><th>Transaction ID</th><th>Effect</th><th class="numeric">Amount</th><th class="numeric">Balance after</th><th>Status</th><th>Original transaction</th></tr></thead>
+              <thead><tr><th>Occurred</th><th>Operation</th><th>Counterparty</th><th>Transaction ID</th><th>Effect</th><th class="numeric">Amount</th><th class="numeric">Balance after</th><th>Status</th><th>Original transaction</th></tr></thead>
               <tbody>
                 @for (activity of activities(); track activity.transactionId) {
                   <tr [class.reversed-row]="activity.status === 'reversed'">
                     <td>{{ activity.occurredAt | date:'medium' }}</td>
                     <td><strong>{{ operationLabel(activity.operation) }}</strong></td>
+                    <td><span class="mono id-value">{{ activity.counterpartyAccountId ?? '—' }}</span></td>
                     <td><span class="mono id-value">{{ activity.transactionId }}</span></td>
                     <td><span class="effect" [class.increase]="activity.effect === 'increase'">{{ activity.effect }}</span></td>
                     <td class="numeric">{{ activity.effect === 'increase' ? '+' : '−' }}{{ activity.amount | currency:'THB':'symbol-narrow':'1.2-2' }}</td>
@@ -123,6 +124,8 @@ export class AccountDetail implements OnInit {
     const labels: Record<BankingOperation, string> = {
       deposit: 'Deposit',
       withdrawal: 'Withdrawal',
+      transfer_out: 'Transfer sent',
+      transfer_in: 'Transfer received',
       bill_payment: 'Bill payment',
       bill_payment_reversal: 'Bill payment reversal',
     };

@@ -26,8 +26,49 @@ final class InMemoryLedgerRepository extends LedgerRepository:
 
   override def post(transaction: LedgerTransaction): Either[DomainError, Account] =
     synchronized {
-      append(transaction)
+      if transaction.operation == BankingOperation.Transfer then
+        Left(
+          LedgerError.InvalidTransaction(
+            "Transfers must use atomic transfer posting"
+          )
+        )
+      else append(transaction)
     }
+
+  override def transfer(
+      transaction: LedgerTransaction,
+      sourceAccountId: AccountId,
+      destinationAccountId: AccountId
+  ): Either[DomainError, TransferAccounts] = synchronized {
+    if journal.exists(_.transactionId == transaction.transactionId) then
+      Left(LedgerError.DuplicateTransaction(transaction.transactionId))
+    else
+      val sourceEntry = customerEntry(transaction, sourceAccountId)
+      val destinationEntry = customerEntry(transaction, destinationAccountId)
+      (sourceEntry, destinationEntry) match
+        case (
+              Some(source @ LedgerEntry(_, LedgerDirection.Debit, _, _)),
+              Some(destination @ LedgerEntry(_, LedgerDirection.Credit, _, _))
+            ) =>
+          val sourceBalance = balanceOf(sourceAccountId)
+          if sourceBalance < source.amount.amount then
+            Left(BankingError.InsufficientFunds(sourceBalance, source.amount.amount))
+          else
+            val destinationBalance = balanceOf(destinationAccountId)
+            journal = journal :+ transaction
+            Right(
+              TransferAccounts(
+                Account(sourceAccountId, applyEntry(sourceBalance, source)),
+                Account(destinationAccountId, applyEntry(destinationBalance, destination))
+              )
+            )
+        case _ =>
+          Left(
+            LedgerError.InvalidTransaction(
+              "A transfer requires a source debit and destination credit"
+            )
+          )
+  }
 
   override def reverse(
       originalTransactionId: UUID,
@@ -115,7 +156,14 @@ final class InMemoryLedgerRepository extends LedgerRepository:
               if reversedTransactionIds.contains(transaction.transactionId) then
                 AccountActivityStatus.Reversed
               else AccountActivityStatus.Posted,
-            originalTransactionId = transaction.reversesTransactionId
+            originalTransactionId = transaction.reversesTransactionId,
+            counterpartyAccountId =
+              if transaction.operation == BankingOperation.Transfer then
+                transaction.entries.collectFirst {
+                  case LedgerEntry(LedgerAccount.Customer(otherAccountId), _, _, _)
+                      if otherAccountId != accountId => otherAccountId
+                }
+              else None
           )
           balanceAfter -> Some(activity)
         case None => runningBalance -> None

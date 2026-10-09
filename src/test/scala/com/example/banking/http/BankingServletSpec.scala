@@ -3,7 +3,7 @@ package com.example.banking.http
 import java.time.Clock
 import java.util.UUID
 
-import com.example.banking.application.{AccountService, DepositService, WithdrawService}
+import com.example.banking.application.{AccountService, DepositService, TransferService, WithdrawService}
 import com.example.banking.infrastructure.{InMemoryAccountRepository, LocalMessageBus}
 import com.example.banking.ledger.LedgerBackedAccountOperations
 import com.example.banking.ledger.infrastructure.InMemoryLedgerRepository
@@ -38,6 +38,12 @@ final class BankingServletSpec extends ScalatraFunSuite:
     Clock.systemUTC(),
     () => UUID.randomUUID()
   )
+  private val transferService = new TransferService(
+    accountOperations,
+    messageBus,
+    Clock.systemUTC(),
+    () => UUID.randomUUID()
+  )
   private val billPaymentService = new BillPaymentService(
     new InMemoryBillerGateway(
       Vector(BillSeed("demo-biller", "customer-001", "invoice-001", BigDecimal("100.00")))
@@ -55,6 +61,7 @@ final class BankingServletSpec extends ScalatraFunSuite:
       accountService,
       depositService,
       withdrawService,
+      transferService,
       billPaymentService,
       accountOperations
     ),
@@ -154,6 +161,92 @@ final class BankingServletSpec extends ScalatraFunSuite:
     postJson("/accounts/missing-account/withdrawals", """{"amount":5.00}""") {
       status shouldBe 404
       (parse(body) \ "error").extract[String] shouldBe "account_not_found"
+    }
+  }
+
+  test("POST /accounts/:accountId/transfers moves funds between existing accounts") {
+    createAccount("transfer-source")
+    createAccount("transfer-destination")
+    postJson("/accounts/transfer-source/deposits", """{"amount":75.00}""") {
+      status shouldBe 200
+    }
+
+    postJson(
+      "/accounts/transfer-source/transfers",
+      """{"destinationAccountId":"transfer-destination","amount":25.50}"""
+    ) {
+      status shouldBe 200
+      val response = parse(body)
+      (response \ "sourceBalance").extract[BigDecimal] shouldBe BigDecimal("49.50")
+      (response \ "destinationAccountId").extract[String] shouldBe "transfer-destination"
+      (response \ "currency").extract[String] shouldBe "THB"
+    }
+
+    get("/accounts/transfer-source/activities") {
+      val transfer = parse(body).extract[Vector[AccountActivityResponse]].last
+      transfer.operation shouldBe "transfer_out"
+      transfer.counterpartyAccountId shouldBe Some("transfer-destination")
+    }
+    get("/accounts/transfer-destination/activities") {
+      val transfer = parse(body).extract[Vector[AccountActivityResponse]].last
+      transfer.operation shouldBe "transfer_in"
+      transfer.counterpartyAccountId shouldBe Some("transfer-source")
+      transfer.balanceAfter shouldBe BigDecimal("25.50")
+    }
+  }
+
+  test("POST /accounts/:accountId/transfers rejects invalid destinations") {
+    createAccount("invalid-transfer-source")
+    postJson("/accounts/invalid-transfer-source/deposits", """{"amount":10.00}""") {
+      status shouldBe 200
+    }
+
+    postJson(
+      "/accounts/invalid-transfer-source/transfers",
+      """{"destinationAccountId":"missing-account","amount":5.00}"""
+    ) {
+      status shouldBe 404
+      (parse(body) \ "error").extract[String] shouldBe "account_not_found"
+    }
+    postJson(
+      "/accounts/invalid-transfer-source/transfers",
+      """{"destinationAccountId":"invalid-transfer-source","amount":5.00}"""
+    ) {
+      status shouldBe 400
+      (parse(body) \ "error").extract[String] shouldBe "same_account_transfer"
+    }
+    postJson(
+      "/accounts/invalid-transfer-source/transfers",
+      """{"destinationAccountId":"missing-account","amount":0}"""
+    ) {
+      status shouldBe 400
+      (parse(body) \ "error").extract[String] shouldBe "invalid_transfer_amount"
+    }
+    postJson(
+      "/accounts/invalid-transfer-source/transfers",
+      """{"amount":5.00}"""
+    ) {
+      status shouldBe 400
+      (parse(body) \ "error").extract[String] shouldBe "invalid_request"
+    }
+  }
+
+  test("POST /accounts/:accountId/transfers rejects insufficient funds atomically") {
+    createAccount("poor-transfer-source")
+    createAccount("safe-transfer-destination")
+    postJson("/accounts/poor-transfer-source/deposits", """{"amount":5.00}""") {
+      status shouldBe 200
+    }
+
+    postJson(
+      "/accounts/poor-transfer-source/transfers",
+      """{"destinationAccountId":"safe-transfer-destination","amount":5.01}"""
+    ) {
+      status shouldBe 409
+      (parse(body) \ "error").extract[String] shouldBe "insufficient_funds"
+    }
+    get("/accounts/safe-transfer-destination/balance") {
+      (parse(body) \ "balance").extract[BigDecimal] shouldBe BigDecimal(0)
     }
   }
 

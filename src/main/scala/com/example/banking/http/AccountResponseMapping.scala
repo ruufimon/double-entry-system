@@ -14,6 +14,9 @@ private[http] object AccountResponseMapping:
       operation = activity.operation match
         case BankingOperation.Deposit             => "deposit"
         case BankingOperation.Withdrawal          => "withdrawal"
+        case BankingOperation.Transfer if activity.effect == BalanceEffect.Decrease =>
+          "transfer_out"
+        case BankingOperation.Transfer => "transfer_in"
         case BankingOperation.BillPayment         => "bill_payment"
         case BankingOperation.BillPaymentReversal => "bill_payment_reversal",
       effect = activity.effect match
@@ -26,5 +29,6 @@ private[http] object AccountResponseMapping:
       status = activity.status match
         case AccountActivityStatus.Posted   => "posted"
         case AccountActivityStatus.Reversed => "reversed",
-      originalTransactionId = activity.originalTransactionId.map(_.toString)
+      originalTransactionId = activity.originalTransactionId.map(_.toString),
+      counterpartyAccountId = activity.counterpartyAccountId.map(_.value)
     )

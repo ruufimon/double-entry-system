@@ -66,6 +66,7 @@ describe('BankingApiService', () => {
           occurredAt: '2026-10-05T01:00:00Z',
           status: 'posted',
           originalTransactionId: null,
+          counterpartyAccountId: null,
         },
       ],
     });
@@ -80,6 +81,26 @@ describe('BankingApiService', () => {
     expect(request.request.method).toBe('POST');
     expect(request.request.body).toEqual({ amount: 10.25 });
     request.flush({ accountId: 'account-123', balance: 10.25 });
+  });
+
+  it('sends a transfer destination and numeric amount', () => {
+    service.transfer('source-account', 'destination-account', 12.5).subscribe();
+
+    const request = http.expectOne('/api/accounts/source-account/transfers');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      destinationAccountId: 'destination-account',
+      amount: 12.5,
+    });
+    request.flush({
+      transferId: 'transfer-123',
+      sourceAccountId: 'source-account',
+      destinationAccountId: 'destination-account',
+      amount: 12.5,
+      currency: 'THB',
+      sourceBalance: 87.5,
+      occurredAt: '2026-10-09T04:00:00Z',
+    });
   });
 
   it('translates domain errors', () => {

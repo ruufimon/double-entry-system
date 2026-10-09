@@ -13,6 +13,7 @@ import {
   BillPaymentInquiry,
   BillPaymentInquiryRequest,
   BillPaymentProcess,
+  TransferResponse,
 } from './banking-api.models';
 
 @Injectable({ providedIn: 'root' })
@@ -52,6 +53,19 @@ export class BankingApiService {
   withdraw(accountId: string, amount: number): Observable<BalanceChangeResponse> {
     return this.request(
       this.http.post<BalanceChangeResponse>(`${this.accountUrl(accountId)}/withdrawals`, { amount }),
+    );
+  }
+
+  transfer(
+    sourceAccountId: string,
+    destinationAccountId: string,
+    amount: number,
+  ): Observable<TransferResponse> {
+    return this.request(
+      this.http.post<TransferResponse>(`${this.accountUrl(sourceAccountId)}/transfers`, {
+        destinationAccountId,
+        amount,
+      }),
     );
   }
 

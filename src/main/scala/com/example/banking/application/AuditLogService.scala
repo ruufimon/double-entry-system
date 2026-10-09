@@ -6,6 +6,7 @@ import com.example.banking.domain.{
   AuditLogEntry,
   BankingOperation,
   DepositCompleted,
+  TransferCompleted,
   WithdrawalCompleted
 }
 import com.example.billpayment.domain.BillPaymentCompleted
@@ -22,6 +23,27 @@ final class AuditLogService(
       messageBus.subscribe {
         case event: DepositCompleted => auditLogRepository.append(AuditLogEntry.from(event))
         case event: WithdrawalCompleted => auditLogRepository.append(AuditLogEntry.from(event))
+        case event: TransferCompleted =>
+          auditLogRepository.append(
+            AuditLogEntry(
+              event.transferId.value,
+              BankingOperation.Transfer,
+              event.sourceAccountId,
+              event.amount,
+              event.sourceResultingBalance,
+              event.occurredAt
+            )
+          )
+          auditLogRepository.append(
+            AuditLogEntry(
+              event.transferId.value,
+              BankingOperation.Transfer,
+              event.destinationAccountId,
+              event.amount,
+              event.destinationResultingBalance,
+              event.occurredAt
+            )
+          )
         case event: BillPaymentCompleted =>
           auditLogRepository.append(
             AuditLogEntry(

@@ -31,6 +31,11 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'accounts/:accountId/transfer',
+    loadComponent: () =>
+      import('./features/transfer/transfer').then((module) => module.Transfer),
+  },
+  {
     path: 'accounts/:accountId/bill-payment',
     loadComponent: () =>
       import('./features/bill-payment/bill-payment').then((module) => module.BillPayment),

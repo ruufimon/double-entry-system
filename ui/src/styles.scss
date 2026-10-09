@@ -387,7 +387,7 @@ input.ng-invalid.ng-touched {
 
 .quick-actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 14px;
 }
 
@@ -428,6 +428,11 @@ input.ng-invalid.ng-touched {
 .action-icon.bill {
   color: #fff;
   background: var(--forest-light);
+}
+
+.action-icon.transfer {
+  color: var(--forest);
+  background: var(--mint-soft);
 }
 
 .action-card strong {
@@ -990,7 +995,7 @@ dd {
   }
 
   .quick-actions {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .action-card {

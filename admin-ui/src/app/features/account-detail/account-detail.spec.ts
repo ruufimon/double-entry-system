@@ -25,10 +25,11 @@ describe('AccountDetail', () => {
         occurredAt: '2026-10-07T04:00:00Z',
         status: 'posted',
         originalTransactionId: null,
+        counterpartyAccountId: null,
       },
       {
         transactionId: 'transaction-2',
-        operation: 'withdrawal',
+        operation: 'transfer_out',
         effect: 'decrease',
         amount: 25,
         currency: 'THB',
@@ -36,6 +37,7 @@ describe('AccountDetail', () => {
         occurredAt: '2026-10-07T05:00:00Z',
         status: 'posted',
         originalTransactionId: null,
+        counterpartyAccountId: 'recipient-456',
       },
     ],
   };
@@ -70,7 +72,8 @@ describe('AccountDetail', () => {
     const rows = fixture.nativeElement.querySelectorAll('.activity-table tbody tr');
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain('transaction-2');
-    expect(rows[0].textContent).toContain('Withdrawal');
+    expect(rows[0].textContent).toContain('Transfer sent');
+    expect(rows[0].textContent).toContain('recipient-456');
     expect(rows[0].textContent).toContain('−฿25.00');
     expect(rows[1].textContent).toContain('transaction-1');
   });

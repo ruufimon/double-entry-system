@@ -62,9 +62,25 @@ object LedgerTransaction:
       case LedgerEntry(_, LedgerDirection.Credit, amount, _) => amount.amount
     }.sum
 
+    val customerEntries = entryVector.collect {
+      case entry @ LedgerEntry(LedgerAccount.Customer(_), _, _, _) => entry
+    }
+
     if entryVector.size < 2 then
       Left(LedgerError.InvalidTransaction("A ledger transaction requires at least two entries"))
-    else if customerEntryCount != 1 then
+    else if operation == BankingOperation.Transfer &&
+        (entryVector.size != 2 || customerEntryCount != 2) then
+      Left(
+        LedgerError.InvalidTransaction(
+          "A transfer requires exactly two customer entries"
+        )
+      )
+    else if operation == BankingOperation.Transfer && customerEntries
+        .collect { case LedgerEntry(LedgerAccount.Customer(id), _, _, _) => id }
+        .distinct
+        .size != 2 then
+      Left(LedgerError.InvalidTransaction("Transfer accounts must be different"))
+    else if operation != BankingOperation.Transfer && customerEntryCount != 1 then
       Left(LedgerError.InvalidTransaction("A ledger transaction requires exactly one customer entry"))
     else if currencies != Vector(Currency.THB) then
       Left(LedgerError.InvalidTransaction("All ledger entries must use THB"))

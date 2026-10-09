@@ -121,6 +121,46 @@ final class AuditLogServiceSpec extends AnyFunSuite with Matchers:
     auditEntry.occurredAt shouldBe event.occurredAt
   }
 
+  test("completed transfer creates audit entries for both accounts") {
+    val messageBus = new LocalMessageBus()
+    val accountOperations = createAccountOperations()
+    val destinationId = requireRight(AccountId.from("destination-account"))
+    requireRight(accountOperations.open(destinationId))
+    val auditLogRepository = new InMemoryAuditLogRepository()
+    val auditLogService = new AuditLogService(messageBus, auditLogRepository)
+    val depositService = new DepositService(
+      accountOperations,
+      messageBus,
+      Clock.systemUTC(),
+      () => UUID.randomUUID()
+    )
+    val transferService = new TransferService(
+      accountOperations,
+      messageBus,
+      Clock.systemUTC(),
+      () => UUID.randomUUID()
+    )
+    auditLogService.subscribe()
+    requireRight(depositService.deposit("account-123", BigDecimal("20.00")))
+
+    val result = requireRight(
+      transferService.transfer("account-123", destinationId.value, BigDecimal("7.50"))
+    )
+    messageBus.awaitIdle(Duration.ofSeconds(3)) shouldBe true
+
+    val transferEntries = auditLogRepository.entries.filter(
+      _.transactionId == result.transferId.value
+    )
+    transferEntries.map(_.accountId) shouldBe Vector(
+      requireRight(AccountId.from("account-123")),
+      destinationId
+    )
+    transferEntries.map(_.resultingBalance) shouldBe Vector(
+      BigDecimal("12.50"),
+      BigDecimal("7.50")
+    )
+  }
+
   private def requireRight[A](result: Either[?, A]): A =
     result match
       case Right(value) => value

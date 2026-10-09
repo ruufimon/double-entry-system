@@ -2,6 +2,8 @@ export type AccountStatus = 'active';
 export type BankingOperation =
   | 'deposit'
   | 'withdrawal'
+  | 'transfer_out'
+  | 'transfer_in'
   | 'bill_payment'
   | 'bill_payment_reversal';
 
@@ -24,6 +26,7 @@ export interface AccountActivity {
   occurredAt: string;
   status: 'posted' | 'reversed';
   originalTransactionId: string | null;
+  counterpartyAccountId: string | null;
 }
 
 export interface AdminAccountDetail extends AdminAccountSummary {

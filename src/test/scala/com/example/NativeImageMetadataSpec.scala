@@ -20,11 +20,32 @@ final class NativeImageMetadataSpec extends AnyFunSuite with Matchers:
     )(stream => parse(Source.fromInputStream(stream).mkString))
 
     val expectedFields = Map(
+      "com.example.banking.http.AccountActivityResponse" -> Set(
+        "transactionId",
+        "operation",
+        "effect",
+        "amount",
+        "currency",
+        "balanceAfter",
+        "occurredAt",
+        "status",
+        "originalTransactionId",
+        "counterpartyAccountId"
+      ),
       "com.example.banking.http.AccountOverviewResponse" -> Set(
         "accountId",
         "currency",
         "balance",
         "activities"
+      ),
+      "com.example.banking.http.TransferResponse" -> Set(
+        "transferId",
+        "sourceAccountId",
+        "destinationAccountId",
+        "amount",
+        "currency",
+        "sourceBalance",
+        "occurredAt"
       ),
       "com.example.banking.http.AdminAccountSummaryResponse" -> Set(
         "accountId",

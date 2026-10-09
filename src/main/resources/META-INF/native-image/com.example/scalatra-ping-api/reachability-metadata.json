@@ -131,6 +131,9 @@
           "name": "balanceAfter"
         },
         {
+          "name": "counterpartyAccountId"
+        },
+        {
           "name": "currency"
         },
         {
@@ -383,6 +386,46 @@
     },
     {
       "type": "com.example.banking.http.ErrorResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.TransferRequest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.lang.String",
+            "scala.math.BigDecimal"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.TransferRequest$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.TransferResponse",
+      "fields": [
+        { "name": "transferId" },
+        { "name": "sourceAccountId" },
+        { "name": "destinationAccountId" },
+        { "name": "amount" },
+        { "name": "currency" },
+        { "name": "sourceBalance" },
+        { "name": "occurredAt" }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.TransferResponse$",
       "fields": [
         {
           "name": "MODULE$"

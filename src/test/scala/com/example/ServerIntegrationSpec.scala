@@ -108,6 +108,35 @@ final class ServerIntegrationSpec extends AnyFunSuite with Matchers with BeforeA
     operations shouldBe List("deposit")
   }
 
+  test("real API atomically transfers money between two accounts") {
+    putJson("/accounts/http-transfer-source", "{}").statusCode() shouldBe 201
+    putJson("/accounts/http-transfer-destination", "{}").statusCode() shouldBe 201
+    postJson(
+      "/accounts/http-transfer-source/deposits",
+      """{"amount":80.00}"""
+    ).statusCode() shouldBe 200
+
+    val response = postJson(
+      "/accounts/http-transfer-source/transfers",
+      """{"destinationAccountId":"http-transfer-destination","amount":30.00}"""
+    )
+    response.statusCode() shouldBe 200
+    val transfer = parse(response.body())
+    (transfer \ "sourceBalance").extract[BigDecimal] shouldBe BigDecimal("50.00")
+
+    val source = parse(get("/accounts/http-transfer-source/overview").body())
+    val destination = parse(get("/accounts/http-transfer-destination/overview").body())
+    (source \ "balance").extract[BigDecimal] shouldBe BigDecimal("50.00")
+    (destination \ "balance").extract[BigDecimal] shouldBe BigDecimal("30.00")
+    val outgoing = (source \ "activities").children.last
+    val incoming = (destination \ "activities").children.last
+    (outgoing \ "operation").extract[String] shouldBe "transfer_out"
+    (outgoing \ "counterpartyAccountId").extract[String] shouldBe
+      "http-transfer-destination"
+    (incoming \ "operation").extract[String] shouldBe "transfer_in"
+    (incoming \ "counterpartyAccountId").extract[String] shouldBe "http-transfer-source"
+  }
+
   private def awaitTerminalPayment(accountId: String, paymentId: String): JValue =
     val deadline = System.nanoTime() + Duration.ofSeconds(3).toNanos
     var payment = parse(get(s"/accounts/$accountId/bill-payments/$paymentId").body())

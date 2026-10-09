@@ -144,6 +144,74 @@ final class InMemoryLedgerRepositorySpec extends AnyFunSuite with Matchers:
     requireRight(operations.find(Account)).balance shouldBe BigDecimal(0)
   }
 
+  test("transfer posts one atomic transaction visible to both accounts") {
+    val (repository, operations) = createLedger()
+    val destination = requireRight(AccountId.from("transfer-destination"))
+    requireRight(operations.open(destination))
+    requireRight(operations.deposit(UUID.randomUUID(), Account, TenBaht, OccurredAt))
+    val transferId = UUID.randomUUID()
+
+    val accounts = requireRight(
+      operations.transfer(
+        transferId,
+        Account,
+        destination,
+        requireRight(Money.positiveTransfer(BigDecimal("3.50"))),
+        OccurredAt.plusSeconds(1)
+      )
+    )
+
+    accounts.source.balance shouldBe BigDecimal("6.50")
+    accounts.destination.balance shouldBe BigDecimal("3.50")
+    repository.transactions.last.entries.toVector should have size 2
+    val sourceActivity = requireRight(operations.activities(Account)).last
+    val destinationActivity = requireRight(operations.activities(destination)).last
+    sourceActivity.transactionId shouldBe transferId
+    sourceActivity.effect shouldBe BalanceEffect.Decrease
+    sourceActivity.counterpartyAccountId shouldBe Some(destination)
+    destinationActivity.transactionId shouldBe transferId
+    destinationActivity.effect shouldBe BalanceEffect.Increase
+    destinationActivity.counterpartyAccountId shouldBe Some(Account)
+
+    operations.transfer(
+      transferId,
+      Account,
+      destination,
+      requireRight(Money.positiveTransfer(BigDecimal("1.00"))),
+      OccurredAt.plusSeconds(2)
+    ) shouldBe Left(LedgerError.DuplicateTransaction(transferId))
+    requireRight(operations.find(Account)).balance shouldBe BigDecimal("6.50")
+    requireRight(operations.find(destination)).balance shouldBe BigDecimal("3.50")
+  }
+
+  test("concurrent transfers cannot overdraw or over-credit") {
+    val (_, operations) = createLedger()
+    val destination = requireRight(AccountId.from("concurrent-destination"))
+    requireRight(operations.open(destination))
+    requireRight(operations.deposit(UUID.randomUUID(), Account, TenBaht, OccurredAt))
+    val start = new CountDownLatch(1)
+
+    val attempts = Vector.fill(2) {
+      Future {
+        start.await()
+        operations.transfer(
+          UUID.randomUUID(),
+          Account,
+          destination,
+          TenBaht,
+          OccurredAt.plusSeconds(1)
+        )
+      }
+    }
+    start.countDown()
+    val results = Await.result(Future.sequence(attempts), 3.seconds)
+
+    results.count(_.isRight) shouldBe 1
+    results.count(_.isLeft) shouldBe 1
+    requireRight(operations.find(Account)).balance shouldBe BigDecimal(0)
+    requireRight(operations.find(destination)).balance shouldBe BigDecimal("10.00")
+  }
+
   test("account activities expose business effects instead of ledger directions") {
     val (_, operations) = createLedger()
     val depositId = UUID.randomUUID()

@@ -22,6 +22,7 @@ describe('AccountDashboard', () => {
         occurredAt: '2026-10-05T01:00:00Z',
         status: 'posted',
         originalTransactionId: null,
+        counterpartyAccountId: null,
       },
     ],
   };

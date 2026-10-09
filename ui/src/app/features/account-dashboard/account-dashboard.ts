@@ -42,6 +42,7 @@ import { AccountActivity, AccountBalance, BankingOperation } from '../../core/ap
             <div class="action-card skeleton-surface"><span class="skeleton-circle"></span><span class="skeleton-line"></span><span class="skeleton-line skeleton-short"></span></div>
             <div class="action-card skeleton-surface"><span class="skeleton-circle"></span><span class="skeleton-line"></span><span class="skeleton-line skeleton-short"></span></div>
             <div class="action-card skeleton-surface"><span class="skeleton-circle"></span><span class="skeleton-line"></span><span class="skeleton-line skeleton-short"></span></div>
+            <div class="action-card skeleton-surface"><span class="skeleton-circle"></span><span class="skeleton-line"></span><span class="skeleton-line skeleton-short"></span></div>
           </div>
         </section>
         <section class="activity-section">
@@ -85,6 +86,9 @@ import { AccountActivity, AccountBalance, BankingOperation } from '../../core/ap
             <a class="action-card" [routerLink]="['/accounts', accountId, 'withdraw']">
               <span class="action-icon decrease">−</span><strong>Withdraw</strong><small>Take out funds</small>
             </a>
+            <a class="action-card" [routerLink]="['/accounts', accountId, 'transfer']">
+              <span class="action-icon transfer">→</span><strong>Transfer</strong><small>Send to an account</small>
+            </a>
             <a class="action-card" [routerLink]="['/accounts', accountId, 'bill-payment']">
               <span class="action-icon bill">↗</span><strong>Pay a bill</strong><small>Settle a biller</small>
             </a>
@@ -109,6 +113,9 @@ import { AccountActivity, AccountBalance, BankingOperation } from '../../core/ap
                   <div class="activity-name">
                     <strong>{{ operationLabel(activity.operation) }}</strong>
                     <span>{{ activity.occurredAt | date:'medium' }}</span>
+                    @if (activity.counterpartyAccountId) {
+                      <span>Account {{ activity.counterpartyAccountId }}</span>
+                    }
                   </div>
                   <div class="activity-status">
                     <span class="status-chip" [class.status-reversed]="activity.status === 'reversed'">
@@ -181,6 +188,8 @@ export class AccountDashboard implements OnInit {
     const labels: Record<BankingOperation, string> = {
       deposit: 'Deposit',
       withdrawal: 'Withdrawal',
+      transfer_out: 'Transfer sent',
+      transfer_in: 'Transfer received',
       bill_payment: 'Bill payment',
       bill_payment_reversal: 'Bill payment reversal',
     };

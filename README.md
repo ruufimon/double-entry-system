@@ -1,7 +1,7 @@
 # Double-Entry Banking System
 
 A small full-stack banking application built with Scala, Scalatra, and Angular.
-It demonstrates account deposits, withdrawals, and event-driven bill payments
+It demonstrates account deposits, withdrawals, atomic transfers, and event-driven bill payments
 backed by an immutable double-entry ledger.
 
 This project is an educational implementation. All accounts, ledger entries,
@@ -12,6 +12,7 @@ when the backend restarts.
 
 - Idempotent account creation with THB balances
 - Deposits and withdrawals with amount and balance validation
+- Atomic transfers between existing accounts
 - Immutable, balanced debit and credit ledger entries
 - Account balances derived from ledger transactions
 - Customer-facing account activity history
@@ -24,8 +25,8 @@ when the backend restarts.
 
 ## Architecture
 
-Business operations use intent-oriented names such as `deposit`, `withdraw`, and
-`bill payment`. The ledger translates those operations into balanced debit and
+Business operations use intent-oriented names such as `deposit`, `withdraw`,
+`transfer`, and `bill payment`. The ledger translates those operations into balanced debit and
 credit entries. It is the source of truth for account balances; completed
 transactions are never edited, and corrections are represented by reversal
 transactions.
@@ -98,6 +99,7 @@ has no authentication; do not expose it to untrusted networks.
 | `GET` | `/accounts/:accountId/activities` | List customer-facing ledger activity |
 | `POST` | `/accounts/:accountId/deposits` | Deposit funds |
 | `POST` | `/accounts/:accountId/withdrawals` | Withdraw funds |
+| `POST` | `/accounts/:accountId/transfers` | Transfer funds to another account |
 | `POST` | `/accounts/:accountId/bill-payments/inquiries` | Retrieve the current bill debt |
 | `POST` | `/accounts/:accountId/bill-payments/:inquiryId/confirm` | Start payment processing |
 | `GET` | `/accounts/:accountId/bill-payments/:paymentId` | Read payment status |
@@ -125,6 +127,25 @@ curl -X POST http://localhost:8080/accounts/account-123/withdrawals \
 curl http://localhost:8080/accounts/account-123/balance
 curl http://localhost:8080/accounts/account-123/activities
 ```
+
+### Transfer example
+
+Both accounts must already exist. A transfer debits the source and credits the
+destination in one ledger transaction:
+
+```bash
+curl -X PUT http://localhost:8080/accounts/recipient-123 \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+
+curl -X POST http://localhost:8080/accounts/account-123/transfers \
+  -H 'Content-Type: application/json' \
+  -d '{"destinationAccountId":"recipient-123","amount":25.50}'
+```
+
+The shared transfer ID appears as `transfer_out` activity on the source and
+`transfer_in` activity on the destination, with the other account identified as
+the counterparty.
 
 ### Bill-payment example
 

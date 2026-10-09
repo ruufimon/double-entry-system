@@ -58,6 +58,38 @@ final class LedgerBackedAccountOperations(
       occurredAt
     )
 
+  override def transfer(
+      transactionId: UUID,
+      sourceAccountId: AccountId,
+      destinationAccountId: AccountId,
+      amount: Money,
+      occurredAt: Instant
+  ): Either[DomainError, TransferAccounts] =
+    for
+      _ <- accountRepository.find(sourceAccountId)
+      _ <- accountRepository.find(destinationAccountId)
+      transaction <- LedgerTransaction.create(
+        transactionId,
+        BankingOperation.Transfer,
+        NonEmptyVector.of(
+          LedgerEntry(
+            LedgerAccount.Customer(sourceAccountId),
+            LedgerDirection.Debit,
+            amount,
+            Currency.THB
+          ),
+          LedgerEntry(
+            LedgerAccount.Customer(destinationAccountId),
+            LedgerDirection.Credit,
+            amount,
+            Currency.THB
+          )
+        ),
+        occurredAt
+      )
+      accounts <- ledgerRepository.transfer(transaction, sourceAccountId, destinationAccountId)
+    yield accounts
+
   override def chargeForBillPayment(
       transactionId: UUID,
       accountId: AccountId,

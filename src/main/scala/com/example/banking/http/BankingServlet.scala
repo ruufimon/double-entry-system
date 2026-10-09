@@ -2,7 +2,7 @@ package com.example.banking.http
 
 import scala.util.control.NonFatal
 
-import com.example.banking.application.{AccountService, DepositService, WithdrawService}
+import com.example.banking.application.{AccountService, DepositService, TransferService, WithdrawService}
 import com.example.banking.domain.{AccountId, BankingError, Currency}
 import com.example.banking.ledger.LedgerError
 import com.example.banking.ports.AccountOperations
@@ -23,6 +23,16 @@ final case class AccountResponse(
 final case class DepositResponse(accountId: String, balance: BigDecimal)
 final case class WithdrawalRequest(amount: BigDecimal)
 final case class WithdrawalResponse(accountId: String, balance: BigDecimal)
+final case class TransferRequest(destinationAccountId: String, amount: BigDecimal)
+final case class TransferResponse(
+    transferId: String,
+    sourceAccountId: String,
+    destinationAccountId: String,
+    amount: BigDecimal,
+    currency: String,
+    sourceBalance: BigDecimal,
+    occurredAt: String
+)
 final case class AccountBalanceResponse(accountId: String, currency: String, balance: BigDecimal)
 final case class AccountOverviewResponse(
     accountId: String,
@@ -39,7 +49,8 @@ final case class AccountActivityResponse(
     balanceAfter: BigDecimal,
     occurredAt: String,
     status: String,
-    originalTransactionId: Option[String]
+    originalTransactionId: Option[String],
+    counterpartyAccountId: Option[String]
 )
 final case class ErrorResponse(error: String, message: String)
 
@@ -47,6 +58,7 @@ final class BankingServlet(
     accountService: AccountService,
     depositService: DepositService,
     withdrawService: WithdrawService,
+    transferService: TransferService,
     protected val billPaymentService: BillPaymentService,
     accountOperations: AccountOperations
 )
@@ -105,6 +117,33 @@ final class BankingServlet(
         ErrorResponse(bankingError.code, bankingError.message)
   }
 
+  post("/:accountId/transfers") {
+    val transferResult = for
+      request <- parseTransferRequest()
+      result <- transferService.transfer(
+        params("accountId"),
+        request.destinationAccountId,
+        request.amount
+      )
+    yield TransferResponse(
+      transferId = result.transferId.value.toString,
+      sourceAccountId = result.sourceAccount.id.value,
+      destinationAccountId = result.destinationAccount.id.value,
+      amount = result.amount.amount,
+      currency = Currency.THB.code,
+      sourceBalance = result.sourceAccount.balance,
+      occurredAt = result.occurredAt.toString
+    )
+
+    transferResult match
+      case Right(transferResponse) =>
+        status = 200
+        transferResponse
+      case Left(error) =>
+        status = errorStatus(error)
+        ErrorResponse(error.code, error.message)
+  }
+
   get("/:accountId/balance") {
     val result = for
       accountId <- AccountId.from(params("accountId"))
@@ -154,6 +193,16 @@ final class BankingServlet(
         Left(
           BankingError.InvalidRequest(
             "Request body must be valid JSON containing a numeric amount"
+          )
+        )
+
+  private def parseTransferRequest(): Either[BankingError, TransferRequest] =
+    try Right(parsedBody.extract[TransferRequest])
+    catch
+      case NonFatal(_) =>
+        Left(
+          BankingError.InvalidRequest(
+            "Request body must contain destinationAccountId and a numeric amount"
           )
         )
 

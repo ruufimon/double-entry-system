@@ -26,11 +26,37 @@ import com.example.billpayment.infrastructure.{
   InMemoryBillPaymentProcessRepository
 }
 import org.eclipse.jetty.ee11.servlet.{ServletContextHandler, ServletHolder}
-import org.eclipse.jetty.server.Server as JettyServer
+import org.eclipse.jetty.server.{NetworkConnector, Server as JettyServer}
+
+private[example] final class BankingApiServer(
+    private val server: JettyServer,
+    private val messageBus: LocalMessageBus
+) extends AutoCloseable:
+  def start(): Unit = server.start()
+
+  def join(): Unit = server.join()
+
+  def port: Int =
+    server.getConnectors.collectFirst { case connector: NetworkConnector =>
+      connector.getLocalPort
+    }.getOrElse(throw new IllegalStateException("API server has no network connector"))
+
+  override def close(): Unit =
+    try server.stop()
+    finally messageBus.close()
 
 object Server:
   def main(args: Array[String]): Unit =
     val port = sys.env.get("PORT").flatMap(_.toIntOption).getOrElse(8080)
+    val server = create(port)
+
+    try
+      server.start()
+      println(s"API listening on http://localhost:${server.port}")
+      server.join()
+    finally server.close()
+
+  private[example] def create(port: Int): BankingApiServer =
     val server = new JettyServer(port)
     val context = new ServletContextHandler()
     val ledgerRepository = new InMemoryLedgerRepository()
@@ -104,9 +130,4 @@ object Server:
       "/admin/*"
     )
     server.setHandler(context)
-
-    try
-      server.start()
-      println(s"API listening on http://localhost:$port")
-      server.join()
-    finally messageBus.close()
+    new BankingApiServer(server, messageBus)

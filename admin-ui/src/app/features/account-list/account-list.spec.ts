@@ -42,7 +42,7 @@ describe('AccountList', () => {
     TestBed.inject(HttpTestingController).expectOne('/api/admin/accounts').flush(accounts);
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Aggregate balance');
+    expect(fixture.nativeElement.textContent).toContain('Total balance');
     expect(fixture.nativeElement.textContent).toContain('฿100.00');
     expect(fixture.nativeElement.querySelectorAll('tbody tr')).toHaveLength(2);
   });

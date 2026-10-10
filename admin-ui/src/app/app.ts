@@ -8,10 +8,18 @@ import { RouterLink, RouterOutlet } from '@angular/router';
   template: `
     <header class="site-header">
       <a class="brand" routerLink="/accounts" aria-label="Ledger Admin accounts">
-        <span class="brand-mark" aria-hidden="true">L</span>
-        <span><strong>Ledger Admin</strong><small>Operational account console</small></span>
+        <span class="brand-mark" aria-hidden="true"><span></span></span>
+        <span><strong>Ledger</strong><small>Admin</small></span>
       </a>
-      <span class="environment-pill">Read-only · In-memory</span>
+      <nav class="primary-nav" aria-label="Primary navigation">
+        <a class="active" routerLink="/accounts">Accounts</a>
+        <span aria-disabled="true">Activity</span>
+        <span aria-disabled="true">Reports</span>
+      </nav>
+      <div class="header-actions">
+        <span class="environment-pill"><i aria-hidden="true"></i> Demo environment</span>
+        <span class="operator-avatar" aria-label="Operations user">OP</span>
+      </div>
     </header>
 
     <div class="security-banner" role="note">
@@ -22,8 +30,8 @@ import { RouterLink, RouterOutlet } from '@angular/router';
     <main class="page-shell"><router-outlet /></main>
 
     <footer class="site-footer">
-      <span>Operational visibility into ledger-derived account data.</span>
-      <span>Read-only console</span>
+      <span>Ledger Operations</span>
+      <span>Read-only administrative console</span>
     </footer>
   `,
 })

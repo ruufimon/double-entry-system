@@ -13,11 +13,11 @@ import { ApiError, toApiError } from '../../core/api/api-error';
   template: `
     <section class="page-heading">
       <div>
-        <a class="back-link" routerLink="/accounts">← All accounts</a>
-        <p class="eyebrow">Account detail</p><h1>{{ accountId }}</h1>
+        <a class="back-link" routerLink="/accounts">‹ Accounts</a>
+        <p class="eyebrow">Account overview</p><h1>{{ accountId }}</h1>
       </div>
       <button class="button button-quiet" type="button" (click)="loadAccount()" [disabled]="loading() || refreshing()">
-        {{ refreshing() ? 'Refreshing…' : 'Refresh data' }}
+        <span class="refresh-icon" aria-hidden="true">↻</span>{{ refreshing() ? 'Refreshing…' : 'Refresh' }}
       </button>
     </section>
 
@@ -40,13 +40,13 @@ import { ApiError, toApiError } from '../../core/api/api-error';
       </div>
     } @else if (account(); as current) {
       <section class="metric-grid detail-metrics" [attr.aria-busy]="refreshing()">
-        <article class="metric-card accent"><span>Available balance</span><strong>{{ current.balance | currency:'THB':'symbol-narrow':'1.2-2' }}</strong><small>{{ current.currency }} · Ledger-derived</small></article>
-        <article class="metric-card"><span>Account status</span><strong class="status-value">{{ current.status }}</strong><small>Read-only operational state</small></article>
-        <article class="metric-card"><span>Activity records</span><strong>{{ current.activityCount }}</strong><small>{{ current.lastActivityAt ? 'Latest ' + (current.lastActivityAt | date:'medium') : 'No activity yet' }}</small></article>
+        <article class="metric-card balance-card accent"><div class="metric-icon wallet-icon" aria-hidden="true">▰</div><span>Available balance</span><strong>{{ current.balance | currency:'THB':'symbol-narrow':'1.2-2' }}</strong><small>{{ current.currency }} · Ledger-derived</small></article>
+        <article class="metric-card"><div class="metric-icon status-icon" aria-hidden="true">✓</div><span>Account status</span><strong class="status-value">{{ current.status }}</strong><small>Read-only operational state</small></article>
+        <article class="metric-card"><div class="metric-icon activity-icon" aria-hidden="true">↗</div><span>Transactions</span><strong>{{ current.activityCount }}</strong><small>{{ current.lastActivityAt ? 'Latest ' + (current.lastActivityAt | date:'medium') : 'No activity yet' }}</small></article>
       </section>
 
       <section class="data-section">
-        <div class="data-toolbar"><div><p class="eyebrow">Immutable record</p><h2>Complete activity</h2></div><span>{{ current.activityCount }} entries</span></div>
+        <div class="data-toolbar"><div><p class="eyebrow">Transaction history</p><h2>Recent activity</h2></div><span>{{ current.activityCount }} entries</span></div>
         @if (activities().length === 0) {
           <div class="table-card empty-state"><strong>No activity recorded</strong><span>This active account currently has no ledger transactions.</span></div>
         } @else {

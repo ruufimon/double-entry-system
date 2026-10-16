@@ -1321,6 +1321,15 @@
       ]
     },
     {
+      "type": "org.h2.Driver",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "org.json4s.Extraction$",
       "fields": [
         {
@@ -1591,6 +1600,9 @@
   "resources": [
     {
       "glob": "META-INF/services/java.nio.channels.spi.SelectorProvider"
+    },
+    {
+      "glob": "META-INF/services/java.sql.Driver"
     },
     {
       "glob": "META-INF/services/java.util.spi.ResourceBundleControlProvider"

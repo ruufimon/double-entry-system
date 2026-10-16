@@ -14,9 +14,10 @@ object Database:
     s"jdbc:h2:mem:$name;DB_CLOSE_DELAY=-1"
 
   def ensureDriver(): Unit =
-    try Class.forName("org.h2.Driver")
-    catch case _: ClassNotFoundException =>
-      throw new IllegalStateException("H2 JDBC driver is not on the classpath")
+    // Reference the driver directly so it is registered with DriverManager and
+    // statically reachable in the GraalVM native image (no reflection needed).
+    org.h2.Driver.load()
+    ()
 
   def open(url: String, user: String = DatabaseConfig.DefaultUser, password: String = DatabaseConfig.DefaultPassword): Database =
     ensureDriver()
@@ -142,10 +143,14 @@ final class Database(
 ) extends AutoCloseable:
   val dataSource: HikariDataSource =
     val hikariConfig = new HikariConfig()
-    hikariConfig.setJdbcUrl(url)
-    hikariConfig.setUsername(user)
-    hikariConfig.setPassword(password)
-    hikariConfig.setDriverClassName("org.h2.Driver")
+    // Supply a concrete DataSource instead of a driver class name so HikariCP
+    // does not need to instantiate the H2 driver reflectively (unavailable in a
+    // GraalVM native image without registration).
+    val h2DataSource = new org.h2.jdbcx.JdbcDataSource()
+    h2DataSource.setURL(url)
+    h2DataSource.setUser(user)
+    h2DataSource.setPassword(password)
+    hikariConfig.setDataSource(h2DataSource)
     hikariConfig.setMaximumPoolSize(10)
     hikariConfig.setConnectionTimeout(5000)
     new HikariDataSource(hikariConfig)

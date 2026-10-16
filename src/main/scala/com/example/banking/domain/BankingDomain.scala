@@ -17,6 +17,10 @@ object AccountId:
       case ValidAccountId() => Right(AccountId(normalizedAccountId))
       case _                => Left(BankingError.InvalidAccountId)
 
+  /** Constructs from an already-normalised value (trusted internal or persisted data). */
+  def unsafe(value: String): AccountId =
+    AccountId(value)
+
 final case class Money private (amount: BigDecimal) derives CanEqual
 
 object Money:
@@ -37,6 +41,10 @@ object Money:
     else
       Right(Money(amount))
 
+  /** Constructs from an already-normalised non-negative value (trusted internal or persisted data). */
+  def of(amount: BigDecimal): Money =
+    Money(amount)
+
 final case class Account(id: AccountId, balance: BigDecimal) derives CanEqual
 
 final case class AccountOpening(account: Account, created: Boolean) derives CanEqual
@@ -51,11 +59,20 @@ final case class TransferAccounts(source: Account, destination: Account) derives
 enum Currency(val code: String) derives CanEqual:
   case THB extends Currency("THB")
 
+object Currency:
+  def unsafe(code: String): Currency = Currency.valueOf(code)
+
 enum BalanceEffect derives CanEqual:
   case Increase, Decrease
 
+object BalanceEffect:
+  def unsafe(name: String): BalanceEffect = BalanceEffect.valueOf(name)
+
 enum AccountActivityStatus derives CanEqual:
   case Posted, Reversed
+
+object AccountActivityStatus:
+  def unsafe(name: String): AccountActivityStatus = AccountActivityStatus.valueOf(name)
 
 trait DomainEvent extends InternalMessage derives CanEqual
 
@@ -92,6 +109,9 @@ final case class TransferCompleted(
 enum BankingOperation derives CanEqual:
   case Deposit, Withdrawal, Transfer, BillPayment, BillPaymentReversal
 
+object BankingOperation:
+  def unsafe(name: String): BankingOperation = BankingOperation.valueOf(name)
+
 final case class AccountActivity(
     transactionId: UUID,
     operation: BankingOperation,
@@ -115,6 +135,23 @@ final case class AuditLogEntry(
 ) derives CanEqual
 
 object AuditLogEntry:
+  def fromRow(
+      transactionId: String,
+      operationName: String,
+      accountId: String,
+      jdbcAmount: java.math.BigDecimal,
+      jdbcResultingBalance: java.math.BigDecimal,
+      occurredAt: Instant
+  ): AuditLogEntry =
+    AuditLogEntry(
+      transactionId = UUID.fromString(transactionId),
+      operation = BankingOperation.valueOf(operationName),
+      accountId = AccountId.unsafe(accountId),
+      amount = Money.of(BigDecimal(jdbcAmount)),
+      resultingBalance = BigDecimal(jdbcResultingBalance),
+      occurredAt = occurredAt
+    )
+
   def from(event: DepositCompleted): AuditLogEntry =
     AuditLogEntry(
       transactionId = event.depositId.value,

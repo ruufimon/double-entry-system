@@ -73,6 +73,11 @@ object BillPaymentId:
       .left
       .map(_ => BillPaymentError.InvalidPaymentId)
 
+  /** Constructs from an already-valid UUID (trusted internal or persisted data). */
+  def unsafe(value: UUID): BillPaymentId = BillPaymentId(value)
+
+  def unsafe(rawValue: String): BillPaymentId = BillPaymentId(UUID.fromString(rawValue))
+
 final case class BillPaymentInquiryId(value: UUID) derives CanEqual
 
 object BillPaymentInquiryId:
@@ -81,6 +86,11 @@ object BillPaymentInquiryId:
       .map(BillPaymentInquiryId.apply)
       .left
       .map(_ => BillPaymentError.InvalidInquiryId)
+
+  /** Constructs from an already-valid UUID (trusted internal or persisted data). */
+  def unsafe(value: UUID): BillPaymentInquiryId = BillPaymentInquiryId(value)
+
+  def unsafe(rawValue: String): BillPaymentInquiryId = BillPaymentInquiryId(UUID.fromString(rawValue))
 
 final case class BillerCode private (value: String) derives CanEqual
 
@@ -93,6 +103,9 @@ object BillerCode:
       case ValidBillerCode() => Right(BillerCode(normalizedBillerCode))
       case _                 => Left(BillPaymentError.InvalidBillerCode)
 
+  /** Constructs from an already-valid value (trusted internal or persisted data). */
+  def unsafe(value: String): BillerCode = BillerCode(value)
+
 final case class BillerReference private (value: String) derives CanEqual
 
 object BillerReference:
@@ -103,6 +116,10 @@ object BillerReference:
     else
       Left(BillPaymentError.InvalidBillerReference(fieldName))
 
+  /** Constructs from an already-valid value (trusted internal or persisted data). */
+  def unsafe(value: String): BillerReference =
+    BillerReference(value)
+
 final case class BillerDebt(
     billerCode: BillerCode,
     referenceCode1: BillerReference,
@@ -110,13 +127,28 @@ final case class BillerDebt(
     amount: Money
 ) derives CanEqual
 
+object BillerDebt:
+  def from(
+      billerCode: BillerCode,
+      referenceCode1: BillerReference,
+      referenceCode2: BillerReference,
+      amount: BigDecimal
+  ): BillerDebt =
+    BillerDebt(billerCode, referenceCode1, referenceCode2, Money.of(amount))
+
 final case class BillerReceipt(receiptCode: String, paidAt: Instant) derives CanEqual
 
 enum BillPaymentInquiryStatus derives CanEqual:
   case Pending, Processing, Completed
 
+object BillPaymentInquiryStatus:
+  def unsafe(name: String): BillPaymentInquiryStatus = BillPaymentInquiryStatus.valueOf(name)
+
 enum BillPaymentStatus derives CanEqual:
   case AwaitingAccountCharge, Settling, Reversing, Completed, Failed, ManualReview
+
+object BillPaymentStatus:
+  def unsafe(name: String): BillPaymentStatus = BillPaymentStatus.valueOf(name)
 
 final case class BillPaymentFailure(code: String, message: String) derives CanEqual
 

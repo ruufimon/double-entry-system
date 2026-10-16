@@ -114,6 +114,16 @@ object LedgerTransaction:
       Some(original.transactionId)
     )
 
+  /** Constructs from already-validated values (trusted internal or persisted data). */
+  def unsafe(
+      transactionId: UUID,
+      operation: BankingOperation,
+      entries: NonEmptyVector[LedgerEntry],
+      occurredAt: Instant,
+      reversesTransactionId: Option[UUID]
+  ): LedgerTransaction =
+    LedgerTransaction(transactionId, operation, entries, occurredAt, reversesTransactionId)
+
 enum LedgerError(val code: String, val message: String)
     extends DomainError
     derives CanEqual:

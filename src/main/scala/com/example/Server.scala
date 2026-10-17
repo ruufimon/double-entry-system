@@ -1,6 +1,6 @@
 package com.example
 
-import java.time.Clock
+import java.time.{Clock, Duration}
 import java.util.UUID
 
 import com.example.banking.application.{
@@ -24,8 +24,10 @@ import com.example.billpayment.infrastructure.{
   BillSeed,
   H2BillPaymentInquiryRepository,
   H2BillPaymentProcessRepository,
+  HttpBillerGateway,
   InMemoryBillerGateway
 }
+import com.example.billpayment.ports.BillerGateway
 import com.example.infrastructure.{Database, DatabaseConfig}
 import org.eclipse.jetty.ee11.servlet.{ServletContextHandler, ServletHolder}
 import org.eclipse.jetty.server.{NetworkConnector, Server as JettyServer}
@@ -74,6 +76,10 @@ object Server:
     )
 
   private[example] def create(port: Int): BankingApiServer =
+    create(port, sys.env.get("BILLER_URL").filter(_.nonEmpty))
+
+  /** Uses the fake biller over HTTP when `billerUrl` is set, otherwise an in-process biller. */
+  private[example] def create(port: Int, billerUrl: Option[String]): BankingApiServer =
     val server = new JettyServer(port)
     val context = new ServletContextHandler()
     val (dbUrl, dbUser, dbPassword) = databaseFromEnv()
@@ -88,9 +94,14 @@ object Server:
     val auditLogRepository = new H2AuditLogRepository(database)
     val inquiryRepository = new H2BillPaymentInquiryRepository(database)
     val processRepository = new H2BillPaymentProcessRepository(database)
-    val billerGateway = new InMemoryBillerGateway(
-      Vector(BillSeed("demo-biller", "customer-001", "invoice-001", BigDecimal("100.00")))
-    )
+    val billerGateway: BillerGateway = billerUrl match
+      case Some(url) =>
+        val timeoutMs = sys.env.get("BILLER_TIMEOUT_MS").flatMap(_.toLongOption).getOrElse(5000L)
+        new HttpBillerGateway(url, Duration.ofMillis(timeoutMs))
+      case None =>
+        new InMemoryBillerGateway(
+          Vector(BillSeed("demo-biller", "customer-001", "invoice-001", BigDecimal("100.00")))
+        )
     val messageBus = new LocalMessageBus()
     val auditLogService = new AuditLogService(messageBus, auditLogRepository)
     val accountMessageHandler = new AccountMessageHandler(

@@ -185,5 +185,6 @@ trait BillPaymentRoutes:
           BillPaymentError.InProgress => 409
       case BillPaymentError.InquiryExpired      => 410
       case BillPaymentError.SettlementFailed(_) => 502
+      case BillPaymentError.BillerUnavailable(_) => 503
       case BillPaymentError.CompensationFailed(_) => 500
       case _                                    => 400

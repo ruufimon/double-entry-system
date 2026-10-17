@@ -7,6 +7,7 @@ import java.net.http.HttpRequest.BodyPublishers
 import java.net.http.HttpResponse
 import java.time.Duration
 
+import com.example.biller.FakeBillerServer
 import org.json4s.*
 import org.json4s.jackson.JsonMethods.parse
 import org.scalatest.BeforeAndAfterEach
@@ -136,6 +137,57 @@ final class ServerIntegrationSpec extends AnyFunSuite with Matchers with BeforeA
     (incoming \ "operation").extract[String] shouldBe "transfer_in"
     (incoming \ "counterpartyAccountId").extract[String] shouldBe "http-transfer-source"
   }
+
+  test("real API pays a bill through the fake biller over HTTP") {
+    withFakeBiller {
+      fundAccount("http-biller-success", "150.00")
+      val paymentId = payBill("http-biller-success", "invoice-002")
+
+      val payment = awaitTerminalPayment("http-biller-success", paymentId)
+      (payment \ "status").extract[String] shouldBe "completed"
+      (payment \ "resultingBalance").extract[BigDecimal] shouldBe BigDecimal("125.00")
+      (payment \ "billerReceiptCode").extract[String] should not be empty
+    }
+  }
+
+  test("real API refunds the charge when the fake biller declines settlement") {
+    withFakeBiller {
+      fundAccount("http-biller-declined", "150.00")
+      val paymentId = payBill("http-biller-declined", "invoice-decline")
+
+      val payment = awaitTerminalPayment("http-biller-declined", paymentId)
+      (payment \ "status").extract[String] shouldBe "failed"
+      (payment \ "failure" \ "error").extract[String] shouldBe "biller_settlement_failed"
+      (payment \ "resultingBalance").extract[BigDecimal] shouldBe BigDecimal("150.00")
+    }
+  }
+
+  private def withFakeBiller(testBody: => Unit): Unit =
+    val billerServer = FakeBillerServer.create(0)
+    billerServer.start()
+    try
+      apiServer.close()
+      apiServer = Server.create(0, Some(s"http://127.0.0.1:${billerServer.port}"))
+      apiServer.start()
+      testBody
+    finally billerServer.close()
+
+  private def fundAccount(accountId: String, amount: String): Unit =
+    putJson(s"/accounts/$accountId", "{}").statusCode() shouldBe 201
+    postJson(s"/accounts/$accountId/deposits", s"""{"amount":$amount}""")
+      .statusCode() shouldBe 200
+
+  private def payBill(accountId: String, referenceCode2: String): String =
+    val inquiry = postJson(
+      s"/accounts/$accountId/bill-payments/inquiries",
+      s"""{"billerCode":"demo-biller","referenceCode1":"customer-001","referenceCode2":"$referenceCode2"}"""
+    )
+    inquiry.statusCode() shouldBe 200
+    val inquiryId = (parse(inquiry.body()) \ "inquiryId").extract[String]
+
+    val confirmation = postJson(s"/accounts/$accountId/bill-payments/$inquiryId/confirm", "{}")
+    confirmation.statusCode() shouldBe 202
+    (parse(confirmation.body()) \ "paymentId").extract[String]
 
   private def awaitTerminalPayment(accountId: String, paymentId: String): JValue =
     val deadline = System.nanoTime() + Duration.ofSeconds(3).toNanos

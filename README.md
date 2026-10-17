@@ -66,6 +66,15 @@ sbt run
 The API listens on `http://localhost:8080`. Set the `PORT` environment variable
 to use a different backend port.
 
+By default the API settles bills with a single in-process demo bill. To pay
+bills through the [fake biller](#fake-biller) over HTTP instead, start it in
+another terminal and point the API at it:
+
+```bash
+sbt runBiller                               # listens on http://localhost:8090
+BILLER_URL=http://localhost:8090 sbt run
+```
+
 In another terminal, install and start the Angular application:
 
 ```bash
@@ -182,6 +191,69 @@ curl \
   http://localhost:8080/accounts/account-123/bill-payments/PAYMENT_ID
 ```
 
+### Fake biller
+
+`com.example.biller.FakeBillerServer` is a standalone HTTP service that plays
+the external biller. The API uses it when `BILLER_URL` is set, through
+`HttpBillerGateway`. It starts with these bills, all under biller code
+`demo-biller` and reference code 1 `customer-001`:
+
+| Reference code 2 | Debt | Behavior | Resulting payment status |
+| --- | --- | --- | --- |
+| `invoice-001` | 100.00 | Settles normally | `completed` |
+| `invoice-002` | 25.00 | Settles normally | `completed` |
+| `invoice-decline` | 40.00 | Settlement returns HTTP 422 | `failed`, charge reversed |
+| `invoice-error` | 40.00 | Settlement returns HTTP 500 | `failed`, charge reversed |
+| `invoice-timeout` | 40.00 | Settlement hangs past the API timeout | `failed`, charge reversed |
+| `invoice-slow` | 60.00 | Responds after 3 seconds | `settling`, then `completed` |
+
+Endpoints:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/billers/:billerCode/bills?referenceCode1=&referenceCode2=` | Current debt (called by the API) |
+| `POST` | `/billers/:billerCode/payments` | Settle a bill, idempotent on `paymentId` (called by the API) |
+| `GET` | `/admin/bills` | List bills and whether they are paid |
+| `PUT` | `/admin/bills` | Add or replace a bill |
+| `DELETE` | `/admin/bills/:billerCode/:referenceCode1/:referenceCode2` | Remove a bill |
+| `POST` | `/admin/reset` | Restore the starting bills, all unpaid |
+| `GET`, `PUT` | `/admin/config` | Read or set the default latency in milliseconds |
+
+`PUT /admin/bills` accepts an optional `scenario` (`ok`, `settle_declined`,
+`settle_error`, `settle_timeout`, or `inquiry_error`), `latencyMs`, and `paid`:
+
+```bash
+curl -X PUT http://localhost:8090/admin/bills \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "billerCode":"water-co",
+    "referenceCode1":"meter-42",
+    "referenceCode2":"2026-10",
+    "amount":12.50,
+    "scenario":"settle_declined",
+    "latencyMs":1500
+  }'
+
+curl -X PUT http://localhost:8090/admin/config \
+  -H 'Content-Type: application/json' -d '{"latencyMs":500}'
+
+curl -X POST http://localhost:8090/admin/reset
+```
+
+| Variable | Service | Default | Purpose |
+| --- | --- | --- | --- |
+| `BILLER_URL` | API | unset | Fake biller base URL; unset keeps the in-process biller |
+| `BILLER_TIMEOUT_MS` | API | `5000` | Connect and request timeout for biller calls |
+| `BILLER_PORT` | Biller | `8090` | Listening port |
+| `BILLER_LATENCY_MS` | Biller | `0` | Default latency for bills without their own `latencyMs` |
+
+The biller is called from the API's single message-bus thread, so a slow or
+hanging settlement delays other queued payment events until it returns or times
+out. The `settle_timeout` scenario never marks the bill paid. A real biller that
+records a payment after the API has timed out would leave the bill paid while
+the API reverses the charge. That needs reconciliation, which this demo leaves
+out.
+
 ## Tests
 
 Run the backend test suite:
@@ -256,8 +328,9 @@ every deploy or restart to reset accounts and ledger entries.
 
 ### Docker
 
-Run the API and both UIs with Docker Compose. Open the customer application at
-`http://localhost:4200` and the admin console at `http://localhost:4300`:
+Run the API, the [fake biller](#fake-biller), and both UIs with Docker Compose.
+Open the customer application at `http://localhost:4200` and the admin console at
+`http://localhost:4300`. The fake biller's admin API is on `http://localhost:8090`:
 
 ```bash
 docker compose up --build
@@ -338,7 +411,8 @@ in the native image but not on the JVM.
 
 ```text
 src/main/scala/com/example/banking/      Account, ledger, messaging, and HTTP code
-src/main/scala/com/example/billpayment/  Bill-payment workflow and biller adapter
+src/main/scala/com/example/billpayment/  Bill-payment workflow and biller adapters
+src/main/scala/com/example/biller/       Fake biller HTTP service for demos
 src/test/scala/                          Backend tests
 ui/                                     Angular application and Playwright tests
 admin-ui/                               Standalone Angular admin application

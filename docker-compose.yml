@@ -1,10 +1,25 @@
-# Runs the API, customer UI, and admin UI together.
+# Runs the API, fake biller, customer UI, and admin UI together.
 services:
   api:
     build:
       context: .
       dockerfile: Dockerfile.native
     image: banking-api:native
+    environment:
+      BILLER_URL: http://biller:8090
+    depends_on:
+      biller:
+        condition: service_started
+
+  # Fake external biller. Its admin API on port 8090 reseeds bills and sets
+  # failure scenarios and latency.
+  biller:
+    build:
+      context: .
+      dockerfile: Dockerfile.biller
+    image: banking-fake-biller:local
+    ports:
+      - "8090:8090"
 
   ui:
     build:

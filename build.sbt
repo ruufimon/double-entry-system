@@ -12,6 +12,8 @@ lazy val root = (project in file("."))
   .enablePlugins(JavaAppPackaging)
   .settings(
     name := "scalatra-ping-api",
+    // The fake biller (com.example.biller.FakeBillerServer) is a second entry point.
+    Compile / mainClass := Some("com.example.Server"),
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-core" % catsVersion,
       "org.scalatra" %% "scalatra-jakarta" % scalatraVersion,
@@ -24,3 +26,5 @@ lazy val root = (project in file("."))
       "org.scalatra" %% "scalatra-scalatest-jakarta" % scalatraVersion % Test
     )
   )
+
+addCommandAlias("runBiller", "runMain com.example.biller.FakeBillerServer")

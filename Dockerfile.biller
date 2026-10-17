@@ -1,0 +1,26 @@
+# Runs the fake biller (com.example.biller.FakeBillerServer) on the JVM.
+#
+# The biller is a demo-only stand-in for an external system, so it skips the
+# GraalVM native build that Dockerfile.native uses for the banking API.
+
+FROM eclipse-temurin:21-jdk AS build
+ARG SBT_VERSION=2.0.9
+RUN curl -fsSL "https://github.com/sbt/sbt/releases/download/v${SBT_VERSION}/sbt-${SBT_VERSION}.tgz" \
+      | tar -xz -C /opt
+ENV PATH="/opt/sbt/bin:${PATH}"
+WORKDIR /app
+
+# Resolve dependencies in their own layer so source changes rebuild faster.
+COPY build.sbt ./
+COPY project/build.properties project/plugins.sbt project/
+RUN sbt -batch update
+
+COPY src src
+RUN sbt -batch stage \
+ && cp -r target/out/jvm/scala-*/scalatra-ping-api/universal/stage /stage
+
+FROM eclipse-temurin:21-jre
+COPY --from=build /stage/lib /app/lib
+ENV BILLER_PORT=8090
+EXPOSE 8090
+ENTRYPOINT ["java", "-cp", "/app/lib/*", "com.example.biller.FakeBillerServer"]

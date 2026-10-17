@@ -45,6 +45,8 @@ enum BillPaymentError(val code: String, val message: String)
       extends BillPaymentError("bill_not_found", "No bill was found for the supplied references")
   case BillNotPayable
       extends BillPaymentError("bill_not_payable", "The bill has already been paid")
+  case BillerUnavailable(details: String)
+      extends BillPaymentError("biller_unavailable", s"Biller is unavailable: $details")
   case InquiryNotFound
       extends BillPaymentError("bill_payment_inquiry_not_found", "Bill payment inquiry was not found")
   case PaymentNotFound

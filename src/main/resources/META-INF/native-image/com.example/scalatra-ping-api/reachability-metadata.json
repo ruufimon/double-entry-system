@@ -10,6 +10,12 @@
       "type": "char[]"
     },
     {
+      "type": "com.zaxxer.hikari.util.ConcurrentBag$IConcurrentBagEntry[]"
+    },
+    {
+      "type": "java.sql.Statement[]"
+    },
+    {
       "type": "com.example.PingServlet",
       "fields": [
         {

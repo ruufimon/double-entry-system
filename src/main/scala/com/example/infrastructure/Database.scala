@@ -4,7 +4,8 @@ import java.sql.{Connection, DriverManager}
 
 import scala.util.Using
 
-import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
+import com.zaxxer.hikari.HikariDataSource
+import org.h2.jdbcx.JdbcDataSource
 
 object Database:
   def url(path: String): String =
@@ -141,14 +142,17 @@ final class Database(
     val password: String = DatabaseConfig.DefaultPassword
 ) extends AutoCloseable:
   val dataSource: HikariDataSource =
-    val hikariConfig = new HikariConfig()
-    hikariConfig.setJdbcUrl(url)
-    hikariConfig.setUsername(user)
-    hikariConfig.setPassword(password)
-    hikariConfig.setDriverClassName("org.h2.Driver")
-    hikariConfig.setMaximumPoolSize(10)
-    hikariConfig.setConnectionTimeout(5000)
-    new HikariDataSource(hikariConfig)
+    val jdbcDataSource = new JdbcDataSource()
+    jdbcDataSource.setURL(url)
+    jdbcDataSource.setUser(user)
+    jdbcDataSource.setPassword(password)
+
+    val hikariDataSource = new HikariDataSource()
+    hikariDataSource.setDataSource(jdbcDataSource)
+    hikariDataSource.setMaximumPoolSize(10)
+    hikariDataSource.setConnectionTimeout(5000)
+    Using.resource(hikariDataSource.getConnection())(_ => ())
+    hikariDataSource
 
   def withConnection[A](operation: Connection => A): A =
     Using.resource(dataSource.getConnection())(operation)

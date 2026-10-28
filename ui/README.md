@@ -23,8 +23,9 @@ Open `http://localhost:4200`. The Angular development server rewrites `/api/*`
 and proxies it to `http://localhost:8080`, so no local CORS configuration is needed
 and browser routes under `/accounts/*` remain owned by Angular.
 
-Entering a valid account ID calls the idempotent account-creation API before
-opening the dashboard. A new account starts at THB 0 with an empty activity list.
+The home page offers the seeded `acc123` and `acc456` demo accounts. Both start
+with THB 100.00 and an opening deposit in their activity history; the customer
+UI does not create accounts.
 
 The demo bill uses:
 

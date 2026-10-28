@@ -21,19 +21,17 @@ describe('AccountEntry', () => {
     });
   });
 
-  it('navigates to the account dashboard after submission', async () => {
+  it('shows only the seeded accounts and navigates without creating an account', async () => {
     const harness = await RouterTestingHarness.create();
-    const component = await harness.navigateByUrl('/', AccountEntry);
+    await harness.navigateByUrl('/', AccountEntry);
 
-    component.accountId.setValue('account-123');
     harness.fixture.detectChanges();
-    const form = harness.fixture.nativeElement.querySelector('form') as HTMLFormElement;
-    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    TestBed.inject(HttpTestingController)
-      .expectOne('/api/accounts/account-123')
-      .flush({ accountId: 'account-123', currency: 'THB', balance: 0, status: 'active' });
+    const links = harness.fixture.nativeElement.querySelectorAll('a[routerLink]') as NodeListOf<HTMLAnchorElement>;
+    expect([...links].map((link) => link.textContent?.trim())).toEqual(['acc123 →', 'acc456 →']);
+    links[0].click();
     await harness.fixture.whenStable();
 
-    expect(TestBed.inject(Location).path()).toBe('/accounts/account-123');
+    expect(TestBed.inject(Location).path()).toBe('/accounts/acc123');
+    TestBed.inject(HttpTestingController).expectNone('/api/accounts/acc123');
   });
 });

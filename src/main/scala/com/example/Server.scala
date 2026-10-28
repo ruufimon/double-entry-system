@@ -1,6 +1,7 @@
 package com.example
 
-import java.time.Clock
+import java.nio.charset.StandardCharsets
+import java.time.{Clock, Instant}
 import java.util.UUID
 
 import com.example.banking.application.{
@@ -17,7 +18,8 @@ import com.example.banking.infrastructure.{
   H2AuditLogRepository,
   LocalMessageBus
 }
-import com.example.banking.ledger.{LedgerBackedAccountOperations}
+import com.example.banking.domain.{AccountId, Money}
+import com.example.banking.ledger.{LedgerBackedAccountOperations, LedgerError}
 import com.example.banking.ledger.infrastructure.H2LedgerRepository
 import com.example.billpayment.application.{BillPaymentProcessManager, BillPaymentService}
 import com.example.billpayment.infrastructure.{
@@ -84,6 +86,7 @@ object Server:
       ledgerRepository,
       accountRepository
     )
+    seedDemoAccounts(accountOperations)
     val accountService = new AccountService(accountOperations)
     val auditLogRepository = new H2AuditLogRepository(database)
     val inquiryRepository = new H2BillPaymentInquiryRepository(database)
@@ -157,3 +160,27 @@ object Server:
     )
     server.setHandler(context)
     new BankingApiServer(server, messageBus, database)
+
+  private def seedDemoAccounts(accountOperations: LedgerBackedAccountOperations): Unit =
+    Vector("acc123", "acc456").foreach { rawAccountId =>
+      val accountId = AccountId.from(rawAccountId).fold(
+        error => throw new IllegalStateException(error.message),
+        identity
+      )
+      accountOperations.open(accountId).fold(
+        error => throw new IllegalStateException(error.message),
+        _ => ()
+      )
+      val seedTransactionId = UUID.nameUUIDFromBytes(
+        s"demo-account-opening:$rawAccountId".getBytes(StandardCharsets.UTF_8)
+      )
+      accountOperations.deposit(
+        seedTransactionId,
+        accountId,
+        Money.of(BigDecimal("100.00")),
+        Instant.now()
+      ) match
+        case Right(_) => ()
+        case Left(LedgerError.DuplicateTransaction(_)) => ()
+        case Left(error) => throw new IllegalStateException(error.message)
+    }

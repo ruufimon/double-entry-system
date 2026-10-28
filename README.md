@@ -10,7 +10,7 @@ when the backend restarts.
 
 ## Features
 
-- Idempotent account creation with THB balances
+- Seeded demo accounts `acc123` and `acc456`, each starting at THB 100.00
 - Deposits and withdrawals with amount and balance validation
 - Atomic transfers between existing accounts
 - Immutable, balanced debit and credit ledger entries
@@ -108,6 +108,11 @@ has no authentication; do not expose it to untrusted networks.
 
 Account IDs may contain 1–64 letters, numbers, underscores, or hyphens. Monetary
 amounts must be positive and have no more than two decimal places.
+
+On startup, the API creates the demo accounts if needed and posts their initial
+THB 100.00 balances as ledger deposits. The customer UI home page lets users
+choose between these accounts. The account creation endpoint remains available
+for API use and test setup.
 
 ### Account example
 

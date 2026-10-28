@@ -1,7 +1,6 @@
 # Render Blueprint: https://render.com/docs/blueprint-spec
-#
-# The API keeps all accounts and ledger entries in memory, so it must run as a
-# single instance; every deploy or restart resets the data.
+# Configure ADMIN_PASSWORD in the Render dashboard before using rate settings.
+# Configure DB_URL and persistent storage for durable data across restarts.
 services:
   - type: web
     name: banking-api
@@ -13,6 +12,10 @@ services:
     numInstances: 1
     healthCheckPath: /ping
     autoDeploy: true
+    envVars:
+      # Configure this secret in the Render dashboard before using rate settings.
+      - key: ADMIN_PASSWORD
+        sync: false
     buildFilter:
       paths:
         - build.sbt

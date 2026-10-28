@@ -55,6 +55,39 @@ describe('AdminApiService', () => {
     });
   });
 
+  it('loads the interest rate with in-memory admin credentials', () => {
+    service.getInterestRate('test-password').subscribe();
+
+    const request = http.expectOne('/api/admin/interest-rate');
+    expect(request.request.method).toBe('GET');
+    expect(request.request.headers.get('Authorization')).toBe(`Basic ${btoa('admin:test-password')}`);
+    request.flush({
+      currentRate: 0,
+      currentEffectiveFrom: '0001-01-01',
+      nextEffectiveFrom: '2026-11-01',
+      scheduledRate: null,
+      scheduledEffectiveFrom: null,
+      history: [],
+    });
+  });
+
+  it('saves an annual rate with admin credentials', () => {
+    service.setInterestRate('test-password', 3.65).subscribe();
+
+    const request = http.expectOne('/api/admin/interest-rate');
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.body).toEqual({ rate: 3.65 });
+    expect(request.request.headers.get('Authorization')).toBe(`Basic ${btoa('admin:test-password')}`);
+    request.flush({
+      currentRate: 0,
+      currentEffectiveFrom: '0001-01-01',
+      nextEffectiveFrom: '2026-11-01',
+      scheduledRate: 3.65,
+      scheduledEffectiveFrom: '2026-11-01',
+      history: [],
+    });
+  });
+
   it('rejects a malformed account-list response instead of exposing undefined data', () => {
     let received: unknown;
     service.getAccounts().subscribe({ error: (error: unknown) => (received = error) });

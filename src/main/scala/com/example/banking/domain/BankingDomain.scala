@@ -107,7 +107,7 @@ final case class TransferCompleted(
 ) extends DomainEvent
 
 enum BankingOperation derives CanEqual:
-  case Deposit, Withdrawal, Transfer, BillPayment, BillPaymentReversal
+  case Deposit, Withdrawal, Transfer, BillPayment, BillPaymentReversal, InterestCredit
 
 object BankingOperation:
   def unsafe(name: String): BankingOperation = BankingOperation.valueOf(name)

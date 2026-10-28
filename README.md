@@ -4,9 +4,9 @@ A small full-stack banking application built with Scala, Scalatra, and Angular.
 It demonstrates account deposits, withdrawals, atomic transfers, and event-driven bill payments
 backed by an immutable double-entry ledger.
 
-This project is an educational implementation. All accounts, ledger entries,
-payment processes, and audit records are currently held in memory and are reset
-when the backend restarts.
+This project is an educational implementation. The backend uses H2 and defaults
+to an in-memory database; set `DB_URL` to an H2 file URL to persist accounts,
+ledger entries, rate settings, and interest processing state across restarts.
 
 ## Features
 
@@ -16,11 +16,12 @@ when the backend restarts.
 - Immutable, balanced debit and credit ledger entries
 - Account balances derived from ledger transactions
 - Customer-facing account activity history
+- Admin-configurable annual interest rates with monthly ledger credits
 - Two-step bill payment inquiry and confirmation
 - Internal message bus for account charging, settlement, reversal, and auditing
 - Cats-powered validation, non-empty ledger entries, and immutable balance transitions
 - Angular account dashboard and operation flows
-- Standalone read-only Angular admin console for account operations
+- Standalone Angular admin console for account operations and interest settings
 - Scala unit and HTTP tests, Angular unit tests, and Playwright E2E coverage
 
 ## Architecture
@@ -60,11 +61,14 @@ See [spec/LedgerFlow.md](spec/LedgerFlow.md) for the detailed flow diagram.
 Start the backend from the repository root:
 
 ```bash
-sbt run
+ADMIN_PASSWORD=choose-a-local-password sbt run
 ```
 
 The API listens on `http://localhost:8080`. Set the `PORT` environment variable
-to use a different backend port.
+to use a different backend port. Rate settings use HTTP Basic authentication
+with the fixed `admin` username. The admin UI keeps the password in memory for
+the current page session. Use HTTPS outside local development. For durable data,
+configure `DB_URL` to an H2 file on persistent storage.
 
 In another terminal, install and start the Angular application:
 
@@ -85,8 +89,8 @@ bun install
 bun run start --host localhost --port 4300
 ```
 
-Open `http://localhost:4300`. This educational admin console is read-only and
-has no authentication; do not expose it to untrusted networks.
+Open `http://localhost:4300`. Account browsing remains part of the demo
+console; the interest-rate settings page requires the configured admin password.
 
 ## API
 
@@ -105,6 +109,8 @@ has no authentication; do not expose it to untrusted networks.
 | `GET` | `/accounts/:accountId/bill-payments/:paymentId` | Read payment status |
 | `GET` | `/admin/accounts` | List operational summaries for every account |
 | `GET` | `/admin/accounts/:accountId` | Read complete operational account activity |
+| `GET` | `/admin/interest-rate` | Read current and scheduled rates and rate history (HTTP Basic admin auth) |
+| `PUT` | `/admin/interest-rate` | Schedule a global annual rate for next month (HTTP Basic admin auth) |
 
 Account IDs may contain 1–64 letters, numbers, underscores, or hyphens. Monetary
 amounts must be positive and have no more than two decimal places.
@@ -265,8 +271,12 @@ Run the API and both UIs with Docker Compose. Open the customer application at
 `http://localhost:4200` and the admin console at `http://localhost:4300`:
 
 ```bash
+export ADMIN_PASSWORD=choose-a-local-password
 docker compose up --build
 ```
+
+Compose requires `ADMIN_PASSWORD` for the protected interest-rate settings.
+You can also put it in an untracked `.env` file beside `docker-compose.yml`.
 
 Compose runs the [native API image](#native-api-image-graalvm). The UI image
 ([`Dockerfile.ui`](Dockerfile.ui)) builds the Angular app and serves it with

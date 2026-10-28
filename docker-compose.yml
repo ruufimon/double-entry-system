@@ -5,6 +5,8 @@ services:
       context: .
       dockerfile: Dockerfile.native
     image: banking-api:native
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in your shell or .env file}
 
   ui:
     build:

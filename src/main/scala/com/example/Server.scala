@@ -1,7 +1,7 @@
 package com.example
 
 import java.nio.charset.StandardCharsets
-import java.time.{Clock, Instant}
+import java.time.{Clock, Instant, ZoneId}
 import java.util.UUID
 
 import com.example.banking.application.{
@@ -9,6 +9,8 @@ import com.example.banking.application.{
   AccountService,
   AuditLogService,
   DepositService,
+  InterestRateService,
+  MonthlyInterestScheduler,
   TransferService,
   WithdrawService
 }
@@ -16,6 +18,7 @@ import com.example.banking.http.{AdminServlet, BankingServlet}
 import com.example.banking.infrastructure.{
   H2AccountRepository,
   H2AuditLogRepository,
+  H2InterestSettingsRepository,
   LocalMessageBus
 }
 import com.example.banking.domain.{AccountId, Money}
@@ -35,9 +38,12 @@ import org.eclipse.jetty.server.{NetworkConnector, Server as JettyServer}
 private[example] final class BankingApiServer(
     private val server: JettyServer,
     private val messageBus: LocalMessageBus,
-    private val database: Database
+    private val database: Database,
+    private val interestScheduler: MonthlyInterestScheduler
 ) extends AutoCloseable:
-  def start(): Unit = server.start()
+  def start(): Unit =
+    server.start()
+    interestScheduler.start()
 
   def join(): Unit = server.join()
 
@@ -48,8 +54,10 @@ private[example] final class BankingApiServer(
 
   override def close(): Unit =
     try
-      try server.stop()
-      finally messageBus.close()
+      try interestScheduler.close()
+      finally
+        try server.stop()
+        finally messageBus.close()
     finally database.close()
 
 object Server:
@@ -75,7 +83,12 @@ object Server:
       sys.env.get("DB_PASSWORD").getOrElse(DatabaseConfig.DefaultPassword)
     )
 
-  private[example] def create(port: Int): BankingApiServer =
+  private[example] def create(
+      port: Int,
+      adminPassword: Option[String] = sys.env.get("ADMIN_PASSWORD"),
+      clock: Clock = Clock.systemUTC(),
+      businessZone: ZoneId = ZoneId.of("Asia/Bangkok")
+  ): BankingApiServer =
     val server = new JettyServer(port)
     val context = new ServletContextHandler()
     val (dbUrl, dbUser, dbPassword) = databaseFromEnv()
@@ -86,6 +99,15 @@ object Server:
       ledgerRepository,
       accountRepository
     )
+    val interestSettingsRepository = new H2InterestSettingsRepository(database)
+    val interestRateService = new InterestRateService(
+      ledgerRepository,
+      accountRepository,
+      interestSettingsRepository,
+      clock,
+      businessZone
+    )
+    val interestScheduler = new MonthlyInterestScheduler(interestRateService, clock, businessZone)
     seedDemoAccounts(accountOperations)
     val accountService = new AccountService(accountOperations)
     val auditLogRepository = new H2AuditLogRepository(database)
@@ -155,11 +177,11 @@ object Server:
       "/accounts/*"
     )
     context.addServlet(
-      new ServletHolder(new AdminServlet(accountOperations)),
+      new ServletHolder(new AdminServlet(accountOperations, Some(interestRateService), adminPassword)),
       "/admin/*"
     )
     server.setHandler(context)
-    new BankingApiServer(server, messageBus, database)
+    new BankingApiServer(server, messageBus, database, interestScheduler)
 
   private def seedDemoAccounts(accountOperations: LedgerBackedAccountOperations): Unit =
     Vector("acc123", "acc456").foreach { rawAccountId =>

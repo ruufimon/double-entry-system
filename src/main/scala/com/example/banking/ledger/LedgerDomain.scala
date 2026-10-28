@@ -14,6 +14,7 @@ enum LedgerAccount derives CanEqual:
   case Customer(accountId: AccountId)
   case Cash
   case BillerClearing
+  case InterestExpense
 
 final case class AccountLedgerSnapshot(
     balance: BigDecimal,
@@ -65,6 +66,9 @@ object LedgerTransaction:
     val customerEntries = entryVector.collect {
       case entry @ LedgerEntry(LedgerAccount.Customer(_), _, _, _) => entry
     }
+    val interestExpenseEntries = entryVector.collect {
+      case entry @ LedgerEntry(LedgerAccount.InterestExpense, _, _, _) => entry
+    }
 
     if entryVector.size < 2 then
       Left(LedgerError.InvalidTransaction("A ledger transaction requires at least two entries"))
@@ -80,6 +84,14 @@ object LedgerTransaction:
         .distinct
         .size != 2 then
       Left(LedgerError.InvalidTransaction("Transfer accounts must be different"))
+    else if operation == BankingOperation.InterestCredit &&
+        (entryVector.size != 2 || customerEntries.headOption.forall(_.direction != LedgerDirection.Credit) ||
+          interestExpenseEntries.size != 1 || interestExpenseEntries.head.direction != LedgerDirection.Debit) then
+      Left(
+        LedgerError.InvalidTransaction(
+          "An interest credit requires a customer credit and an interest-expense debit"
+        )
+      )
     else if operation != BankingOperation.Transfer && customerEntryCount != 1 then
       Left(LedgerError.InvalidTransaction("A ledger transaction requires exactly one customer entry"))
     else if currencies != Vector(Currency.THB) then

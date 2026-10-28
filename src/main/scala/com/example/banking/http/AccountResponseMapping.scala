@@ -18,7 +18,8 @@ private[http] object AccountResponseMapping:
           "transfer_out"
         case BankingOperation.Transfer => "transfer_in"
         case BankingOperation.BillPayment         => "bill_payment"
-        case BankingOperation.BillPaymentReversal => "bill_payment_reversal",
+        case BankingOperation.BillPaymentReversal => "bill_payment_reversal"
+        case BankingOperation.InterestCredit      => "interest_credit",
       effect = activity.effect match
         case BalanceEffect.Increase => "increase"
         case BalanceEffect.Decrease => "decrease",

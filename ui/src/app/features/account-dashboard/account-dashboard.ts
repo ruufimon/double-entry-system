@@ -192,6 +192,7 @@ export class AccountDashboard implements OnInit {
       transfer_in: 'Transfer received',
       bill_payment: 'Bill payment',
       bill_payment_reversal: 'Bill payment reversal',
+      interest_credit: 'Monthly interest',
     };
     return labels[operation];
   }

@@ -1,6 +1,6 @@
 package com.example.banking.ledger.infrastructure
 
-import java.time.Instant
+import java.time.{Instant, LocalDate, YearMonth, ZoneId}
 import java.util.UUID
 
 import cats.data.State
@@ -11,6 +11,7 @@ import com.example.domain.DomainError
 
 final class InMemoryLedgerRepository extends LedgerRepository:
   private var journal = Vector.empty[LedgerTransaction]
+  private var interestPeriods = Set.empty[(AccountId, YearMonth)]
 
   override def balance(accountId: AccountId): BigDecimal = synchronized {
     balanceOf(accountId)
@@ -34,6 +35,50 @@ final class InMemoryLedgerRepository extends LedgerRepository:
         )
       else append(transaction)
     }
+
+  override def postInterestCredit(
+      transaction: LedgerTransaction,
+      accountId: AccountId,
+      period: YearMonth
+  ): Either[DomainError, Boolean] = synchronized {
+    if interestPeriods.contains(accountId -> period) then Right(false)
+    else
+      append(transaction).map { _ =>
+        interestPeriods += (accountId -> period)
+        true
+      }
+  }
+
+  override def dailyClosingBalances(
+      accountId: AccountId,
+      from: LocalDate,
+      through: LocalDate,
+      zoneId: ZoneId
+  ): Vector[(LocalDate, BigDecimal)] = synchronized {
+    val throughExclusive = through.plusDays(1).atStartOfDay(zoneId).toInstant
+    val events = journal.zipWithIndex.flatMap { case (transaction, sequence) =>
+      transaction.entries.toVector.collectFirst {
+        case entry @ LedgerEntry(LedgerAccount.Customer(id), _, _, _) if id == accountId =>
+          (transaction.occurredAt, sequence, entry)
+      }
+    }.filter { case (occurredAt, _, _) => occurredAt.isBefore(throughExclusive) }
+      .sortWith { case ((leftAt, leftSequence, _), (rightAt, rightSequence, _)) =>
+        if leftAt == rightAt then leftSequence < rightSequence else leftAt.isBefore(rightAt)
+      }
+
+    var eventIndex = 0
+    var runningBalance = BigDecimal(0)
+    val results = Vector.newBuilder[(LocalDate, BigDecimal)]
+    var day = from
+    while !day.isAfter(through) do
+      while eventIndex < events.size &&
+          !events(eventIndex)._1.atZone(zoneId).toLocalDate.isAfter(day) do
+        runningBalance = applyEntry(runningBalance, events(eventIndex)._3)
+        eventIndex += 1
+      results += day -> runningBalance
+      day = day.plusDays(1)
+    results.result()
+  }
 
   override def transfer(
       transaction: LedgerTransaction,

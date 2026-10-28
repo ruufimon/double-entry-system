@@ -5,7 +5,8 @@ export type BankingOperation =
   | 'transfer_out'
   | 'transfer_in'
   | 'bill_payment'
-  | 'bill_payment_reversal';
+  | 'bill_payment_reversal'
+  | 'interest_credit';
 
 export interface AdminAccountSummary {
   accountId: string;
@@ -31,6 +32,25 @@ export interface AccountActivity {
 
 export interface AdminAccountDetail extends AdminAccountSummary {
   activities: readonly AccountActivity[];
+}
+
+export type InterestRateStatus = 'current' | 'scheduled' | 'superseded';
+
+export interface InterestRateHistoryItem {
+  rate: number;
+  effectiveFrom: string;
+  createdAt: string;
+  updatedBy: string;
+  status: InterestRateStatus;
+}
+
+export interface AdminInterestRate {
+  currentRate: number;
+  currentEffectiveFrom: string;
+  nextEffectiveFrom: string;
+  scheduledRate: number | null;
+  scheduledEffectiveFrom: string | null;
+  history: readonly InterestRateHistoryItem[];
 }
 
 export interface ErrorResponse {

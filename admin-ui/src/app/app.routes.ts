@@ -14,5 +14,10 @@ export const routes: Routes = [
         (module) => module.AccountDetail,
       ),
   },
+  {
+    path: 'interest-rate',
+    loadComponent: () =>
+      import('./features/interest-rate/interest-rate').then((module) => module.InterestRate),
+  },
   { path: '**', redirectTo: 'accounts' },
 ];

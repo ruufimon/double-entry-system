@@ -1,7 +1,7 @@
 package com.example.banking.ledger.infrastructure
 
 import java.sql.{Connection, PreparedStatement, ResultSet}
-import java.time.Instant
+import java.time.{Instant, LocalDate, YearMonth, ZoneId}
 import java.util.UUID
 
 import cats.data.NonEmptyVector
@@ -28,6 +28,75 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
       Left(LedgerError.InvalidTransaction("Transfers must use atomic transfer posting"))
     else
       database.withTransaction(connection => runAppend(connection, transaction))
+
+  override def postInterestCredit(
+      transaction: LedgerTransaction,
+      accountId: AccountId,
+      period: YearMonth
+  ): Either[DomainError, Boolean] =
+    if transaction.operation != BankingOperation.InterestCredit then
+      Left(LedgerError.InvalidTransaction("An interest credit must use the interest-credit operation"))
+    else
+      transaction.entries.toVector.collectFirst {
+        case entry @ LedgerEntry(LedgerAccount.Customer(id), LedgerDirection.Credit, _, _)
+            if id == accountId => entry
+      } match
+        case None => Left(LedgerError.InvalidTransaction("An interest credit requires a customer credit"))
+        case Some(customerEntry) =>
+          database.withTransaction { connection =>
+            lockAccount(connection, accountId)
+            if interestPeriodExists(connection, accountId, period) then Right(false)
+            else if transactionExists(connection, transaction.transactionId) then
+              Left(LedgerError.DuplicateTransaction(transaction.transactionId))
+            else
+              insertTransaction(connection, transaction)
+              val statement = connection.prepareStatement(
+                "INSERT INTO interest_credit_periods (account_id, period_start, amount, transaction_id, created_at) VALUES (?, ?, ?, ?, ?)"
+              )
+              try
+                statement.setString(1, accountId.value)
+                statement.setDate(2, java.sql.Date.valueOf(period.atDay(1)))
+                statement.setBigDecimal(3, customerEntry.amount.amount.bigDecimal)
+                statement.setString(4, transaction.transactionId.toString)
+                statement.setTimestamp(5, java.sql.Timestamp.from(transaction.occurredAt))
+                statement.executeUpdate()
+              finally statement.close()
+              Right(true)
+          }
+
+  override def dailyClosingBalances(
+      accountId: AccountId,
+      from: LocalDate,
+      through: LocalDate,
+      zoneId: ZoneId
+  ): Vector[(LocalDate, BigDecimal)] =
+    if through.isBefore(from) then Vector.empty
+    else
+      database.withConnection { connection =>
+        val statement = connection.prepareStatement(
+          """
+          SELECT t.occurred_at, t.sequence_no, e.direction, e.amount
+          FROM ledger_transactions t
+          JOIN ledger_entries e ON e.transaction_id = t.transaction_id
+          WHERE e.customer_account_id = ? AND t.occurred_at < ?
+          ORDER BY t.occurred_at, t.sequence_no
+          """
+        )
+        try
+          statement.setString(1, accountId.value)
+          val dayAfterThrough = through.plusDays(1).atStartOfDay(zoneId).toInstant
+          statement.setTimestamp(2, java.sql.Timestamp.from(dayAfterThrough))
+          val rows = statement.executeQuery()
+          val events = Vector.newBuilder[(LocalDate, BigDecimal)]
+          while rows.next() do
+            val amount = BigDecimal(rows.getBigDecimal(4))
+            val delta = rows.getString(3) match
+              case "Credit" => amount
+              case "Debit"  => -amount
+            events += rows.getTimestamp(1).toInstant.atZone(zoneId).toLocalDate -> delta
+          balancesByDay(from, through, events.result())
+        finally statement.close()
+      }
 
   override def transfer(
       transaction: LedgerTransaction,
@@ -165,6 +234,37 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
       statement.executeQuery().next()
     finally statement.close()
 
+  private def interestPeriodExists(
+      connection: Connection,
+      accountId: AccountId,
+      period: YearMonth
+  ): Boolean =
+    val statement = connection.prepareStatement(
+      "SELECT 1 FROM interest_credit_periods WHERE account_id = ? AND period_start = ?"
+    )
+    try
+      statement.setString(1, accountId.value)
+      statement.setDate(2, java.sql.Date.valueOf(period.atDay(1)))
+      statement.executeQuery().next()
+    finally statement.close()
+
+  private def balancesByDay(
+      from: LocalDate,
+      through: LocalDate,
+      events: Vector[(LocalDate, BigDecimal)]
+  ): Vector[(LocalDate, BigDecimal)] =
+    var eventIndex = 0
+    var balance = BigDecimal(0)
+    val result = Vector.newBuilder[(LocalDate, BigDecimal)]
+    var day = from
+    while !day.isAfter(through) do
+      while eventIndex < events.size && !events(eventIndex)._1.isAfter(day) do
+        balance += events(eventIndex)._2
+        eventIndex += 1
+      result += day -> balance
+      day = day.plusDays(1)
+    result.result()
+
   private def anyReverses(connection: Connection, transactionId: UUID): Boolean =
     val statement =
       connection.prepareStatement("SELECT 1 FROM ledger_transactions WHERE reverses_transaction_id = ?")
@@ -276,6 +376,7 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
             accountRaw match
               case "Cash"         => LedgerAccount.Cash
               case "BillerClearing" => LedgerAccount.BillerClearing
+              case "InterestExpense" => LedgerAccount.InterestExpense
               case _ => throw new IllegalStateException(s"Unknown ledger account: $accountRaw")
         builder += LedgerEntry(
           account,
@@ -310,6 +411,7 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
           case LedgerAccount.Customer(accountId) => ("Customer", Some(accountId.value))
           case LedgerAccount.Cash                => ("Cash", None)
           case LedgerAccount.BillerClearing      => ("BillerClearing", None)
+          case LedgerAccount.InterestExpense     => ("InterestExpense", None)
         entryStatement.setString(1, transaction.transactionId.toString)
         entryStatement.setInt(2, index)
         entryStatement.setString(3, accountRaw)

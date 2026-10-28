@@ -1,15 +1,25 @@
 # Ledger Admin UI
 
-Standalone, read-only Angular 22 administration console for the Scalatra
-banking API. This demo intentionally has no authentication and must not be
-exposed to untrusted networks.
+Standalone Angular 22 administration console for the Scalatra banking API.
+Account browsing is part of the demo console. Interest-rate settings require
+HTTP Basic authentication using the fixed `admin` username and the API's
+`ADMIN_PASSWORD` environment variable.
 
-Operators can browse and filter all accounts or open a specific account
-directly by entering its exact account ID.
+Operators can browse and filter accounts, inspect account activity, and configure
+the global annual interest rate. A new rate takes effect at the beginning of
+the next Bangkok calendar month. The browser keeps the password in memory only
+for the current rate-settings page session; serve the admin UI and API over
+HTTPS outside local development.
 
 ## Development
 
-Start the API from the repository root with `sbt run`. Then run:
+Start the API from the repository root with an admin password:
+
+```bash
+ADMIN_PASSWORD=choose-a-local-password sbt run
+```
+
+Then run:
 
 ```bash
 cd admin-ui

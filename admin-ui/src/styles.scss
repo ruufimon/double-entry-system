@@ -135,6 +135,16 @@ tbody tr:hover { background: #f8faff; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 
+@media (min-width: 1600px) {
+  .site-header { padding-inline: max(48px, calc((100vw - 1440px) / 2)); }
+  .security-banner, .page-shell, .site-footer { width: min(1440px, calc(100% - 96px)); }
+  .page-shell { height: calc(100vh - 208px); min-height: 0; overflow-y: auto; padding-block: 36px 48px; }
+}
+
+@media (min-width: 1600px) and (min-height: 900px) {
+  body { height: 100vh; overflow: hidden; }
+}
+
 @media (max-width: 900px) {
   .site-header { grid-template-columns: 1fr auto; }
   .primary-nav { display: none; }

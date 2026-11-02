@@ -1448,12 +1448,20 @@
       "queryAllPublicMethods": true,
       "methods": [
         {
+          "name": "getNamespace",
+          "parameterTypes": []
+        },
+        {
           "name": "getTransactional",
           "parameterTypes": []
         },
         {
           "name": "setTransactional",
           "parameterTypes": ["org.flywaydb.database.postgresql.TransactionalModel"]
+        },
+        {
+          "name": "copy",
+          "parameterTypes": []
         }
       ]
     },
@@ -1486,7 +1494,17 @@
       "allPublicMethods": true,
       "allPublicFields": true,
       "queryAllDeclaredMethods": true,
-      "queryAllPublicMethods": true
+      "queryAllPublicMethods": true,
+      "methods": [
+        {
+          "name": "getNamespace",
+          "parameterTypes": []
+        },
+        {
+          "name": "copy",
+          "parameterTypes": []
+        }
+      ]
     },
     {
       "type": "org.flywaydb.core.internal.command.clean.CleanModeConfigurationExtension",
@@ -1500,12 +1518,20 @@
       "queryAllPublicMethods": true,
       "methods": [
         {
+          "name": "getNamespace",
+          "parameterTypes": []
+        },
+        {
           "name": "getClean",
           "parameterTypes": []
         },
         {
           "name": "setClean",
           "parameterTypes": ["org.flywaydb.core.internal.command.clean.CleanModel"]
+        },
+        {
+          "name": "copy",
+          "parameterTypes": []
         }
       ]
     },
@@ -1529,7 +1555,17 @@
       "allPublicMethods": true,
       "allPublicFields": true,
       "queryAllDeclaredMethods": true,
-      "queryAllPublicMethods": true
+      "queryAllPublicMethods": true,
+      "methods": [
+        {
+          "name": "getNamespace",
+          "parameterTypes": []
+        },
+        {
+          "name": "copy",
+          "parameterTypes": []
+        }
+      ]
     },
     {
       "type": "org.flywaydb.core.internal.license.FlywayEditionUpgradeRequiredException",

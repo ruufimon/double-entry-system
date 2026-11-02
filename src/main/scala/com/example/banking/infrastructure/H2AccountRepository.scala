@@ -1,7 +1,7 @@
 package com.example.banking.infrastructure
 
 import java.time.Instant
-import java.sql.{PreparedStatement, ResultSet}
+import java.sql.{PreparedStatement, ResultSet, SQLException}
 
 import com.example.banking.domain.{Account, AccountId, AccountOpening, BankingError}
 import com.example.banking.ports.AccountRepository
@@ -9,22 +9,27 @@ import com.example.domain.DomainError
 import com.example.infrastructure.Database
 
 final class H2AccountRepository(database: Database) extends AccountRepository:
+  // Standard SQLSTATE: pgjdbc reports it as a plain PSQLException, not a constraint violation type.
+  private val UniqueViolation = "23505"
+
   override def open(accountId: AccountId): AccountOpening =
     val openedAt = Instant.now()
-    database.withTransaction { connection =>
-      val statement = connection.prepareStatement(
-        "INSERT INTO accounts (account_id, opened_at) VALUES (?, ?)"
-      )
-      try
-        statement.setString(1, accountId.value)
-        statement.setTimestamp(2, java.sql.Timestamp.from(openedAt))
-        val inserted = statement.executeUpdate() > 0
-        AccountOpening(Account(accountId, BigDecimal(0)), inserted)
-      catch
-        case _: java.sql.SQLIntegrityConstraintViolationException =>
-          AccountOpening(Account(accountId, BigDecimal(0)), false)
-      finally statement.close()
-    }
+    // Caught outside the transaction: on PostgreSQL a failed INSERT aborts it, so it cannot commit.
+    try
+      database.withTransaction { connection =>
+        val statement = connection.prepareStatement(
+          "INSERT INTO accounts (account_id, opened_at) VALUES (?, ?)"
+        )
+        try
+          statement.setString(1, accountId.value)
+          statement.setTimestamp(2, java.sql.Timestamp.from(openedAt))
+          val inserted = statement.executeUpdate() > 0
+          AccountOpening(Account(accountId, BigDecimal(0)), inserted)
+        finally statement.close()
+      }
+    catch
+      case error: SQLException if error.getSQLState == UniqueViolation =>
+        AccountOpening(Account(accountId, BigDecimal(0)), false)
 
   override def find(accountId: AccountId): Either[DomainError, Account] =
     database.withConnection { connection =>

@@ -57,6 +57,20 @@ final class PostgresLedgerRepositorySpec extends AnyFunSuite with Matchers with 
     finally database.close()
   }
 
+  test("PostgreSQL: opening an existing account keeps its balance and reports it was not created") {
+    val database = createPostgresDatabase()
+    try
+      val account = requireRight(AccountId.from("postgres-account-reopened"))
+      val (_, operations) = createLedger(database)
+      requireRight(operations.open(account)).created shouldBe true
+      requireRight(operations.deposit(UUID.randomUUID(), account, TenBaht, OccurredAt))
+
+      requireRight(operations.open(account)).created shouldBe false
+
+      requireRight(operations.find(account)).balance shouldBe BigDecimal("10.00")
+    finally database.close()
+  }
+
   test("PostgreSQL: concurrent withdrawals cannot overdraw an account") {
     val database = createPostgresDatabase()
     try

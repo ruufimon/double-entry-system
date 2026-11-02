@@ -62,7 +62,8 @@ jobs:
     - name: Set up GraalVM
       uses: graalvm/setup-graalvm@v1
       with:
-        java-version: '21'
+        # Keep in step with Dockerfile.native: older versions ignore reachability-metadata.json.
+        java-version: '25'
         distribution: 'graalvm-community'
         github-token: ${{ secrets.GITHUB_TOKEN }}
         native-image-job-reports: 'true'

@@ -1,12 +1,19 @@
 package com.example.infrastructure
 
+import java.io.{InputStreamReader, Reader}
 import java.net.URI
+import java.nio.charset.StandardCharsets
 import java.sql.Connection
+import java.util.{Collection as JCollection, Collections}
 
+import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
 import com.zaxxer.hikari.HikariDataSource
 import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.{ClassProvider, FlywayException, ResourceProvider}
+import org.flywaydb.core.api.migration.JavaMigration
+import org.flywaydb.core.api.resource.LoadableResource
 
 enum DatabaseVendor:
   case H2, PostgreSQL
@@ -144,10 +151,55 @@ object Database:
     new Database(url, user, password)
 
 object Schema:
+  /** Every migration, in src/main/resources/db/migration. Add new files here too.
+    *
+    * Flyway finds migrations by scanning the classpath, but it cannot scan the `resource:` URLs a
+    * GraalVM native image produces: it logs a warning and applies nothing. Listing them explicitly
+    * gives the JVM and the native image the same code path. SchemaSpec keeps this list in sync.
+    */
+  private[infrastructure] val MigrationFiles: List[String] = List(
+    "V1__initial_schema.sql",
+    "V2__interest_credit_periods.sql"
+  )
+
+  private val MigrationDirectory = "db/migration"
+
+  private final class MigrationResource(fileName: String) extends LoadableResource:
+    private val path = s"$MigrationDirectory/$fileName"
+
+    override def read(): Reader =
+      val stream = Option(getClass.getClassLoader.getResourceAsStream(path))
+        .getOrElse(throw new FlywayException(s"Migration not found on the classpath: $path"))
+      new InputStreamReader(stream, StandardCharsets.UTF_8)
+
+    override def getAbsolutePath: String = path
+    override def getAbsolutePathOnDisk: String = path
+    override def getFilename: String = fileName
+    override def getRelativePath: String = fileName
+
+  private object MigrationResources extends ResourceProvider:
+    private val resources: List[LoadableResource] = MigrationFiles.map(new MigrationResource(_))
+
+    override def getResource(name: String): LoadableResource =
+      resources.find(_.getRelativePath == name).orNull
+
+    override def getResources(prefix: String, suffixes: Array[String]): JCollection[LoadableResource] =
+      resources
+        .filter { resource =>
+          val fileName = resource.getFilename
+          fileName.startsWith(prefix) && suffixes.exists(fileName.endsWith)
+        }
+        .asJava
+
+  // Supplying both providers stops Flyway from creating its classpath scanner at all.
+  private object NoJavaMigrations extends ClassProvider[JavaMigration]:
+    override def getClasses: JCollection[Class[? <: JavaMigration]] = Collections.emptyList()
+
   def migrate(url: String, user: String, password: String): Unit =
     val flyway = Flyway.configure()
       .dataSource(url, user, password)
-      .locations("classpath:db/migration")
+      .resourceProvider(MigrationResources)
+      .javaMigrationClassProvider(NoJavaMigrations)
       .load()
     flyway.migrate()
 

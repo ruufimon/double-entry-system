@@ -26,6 +26,8 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
   override def post(transaction: LedgerTransaction): Either[DomainError, Account] =
     if transaction.operation == BankingOperation.Transfer then
       Left(LedgerError.InvalidTransaction("Transfers must use atomic transfer posting"))
+    else if transaction.operation == BankingOperation.Adjustment then
+      Left(LedgerError.InvalidTransaction("Adjustments must be posted with a memo"))
     else
       database.withTransaction(connection => runAppend(connection, transaction))
 
@@ -294,7 +296,8 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
     val statement = connection.prepareStatement(
       """
       SELECT
-        t.transaction_id, t.occurred_at, t.operation, t.reverses_transaction_id,
+        t.transaction_id, t.occurred_at, t.operation,
+        COALESCE(t.reverses_transaction_id, t.adjusts_transaction_id),
         e.direction, e.amount, e.currency,
         CASE WHEN EXISTS (SELECT 1 FROM ledger_transactions r
               WHERE r.reverses_transaction_id = t.transaction_id)
@@ -342,7 +345,7 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
       transactionId: UUID
   ): Option[LedgerTransaction] =
     val statement = connection.prepareStatement(
-      "SELECT operation, occurred_at, reverses_transaction_id FROM ledger_transactions WHERE transaction_id = ?"
+      "SELECT operation, occurred_at, reverses_transaction_id, adjusts_transaction_id FROM ledger_transactions WHERE transaction_id = ?"
     )
     try
       statement.setString(1, transactionId.toString)
@@ -355,7 +358,8 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
             BankingOperation.unsafe(rows.getString(1)),
             NonEmptyVector.fromVectorUnsafe(readEntries(connection, transactionId)),
             rows.getTimestamp(2).toInstant(),
-            Option(rows.getString(3)).map(UUID.fromString)
+            Option(rows.getString(3)).map(UUID.fromString),
+            Option(rows.getString(4)).map(UUID.fromString)
           )
         )
     finally statement.close()
@@ -376,6 +380,7 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
             accountRaw match
               case "Cash"         => LedgerAccount.Cash
               case "BillerClearing" => LedgerAccount.BillerClearing
+              case "Adjustments"    => LedgerAccount.Adjustments
               case "InterestExpense" => LedgerAccount.InterestExpense
               case _ => throw new IllegalStateException(s"Unknown ledger account: $accountRaw")
         builder += LedgerEntry(
@@ -390,7 +395,7 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
   private def insertTransaction(connection: Connection, transaction: LedgerTransaction): Unit =
     val txStatement =
       connection.prepareStatement(
-        "INSERT INTO ledger_transactions (transaction_id, operation, occurred_at, reverses_transaction_id) VALUES (?, ?, ?, ?)"
+        "INSERT INTO ledger_transactions (transaction_id, operation, occurred_at, reverses_transaction_id, adjusts_transaction_id) VALUES (?, ?, ?, ?, ?)"
       )
     val entryStatement =
       connection.prepareStatement(
@@ -403,6 +408,7 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
       transaction.reversesTransactionId match
         case Some(original) => txStatement.setString(4, original.toString)
         case None           => txStatement.setString(4, null)
+      txStatement.setString(5, transaction.adjustsTransactionId.map(_.toString).orNull)
       txStatement.executeUpdate()
 
       var index = 0

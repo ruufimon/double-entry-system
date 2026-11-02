@@ -98,7 +98,7 @@ enum AdjustmentDirection derives CanEqual:
 
 object AdjustmentDirection:
   def from(raw: Option[String]): Either[BankingError, AdjustmentDirection] =
-    raw.map(_.trim.toLowerCase) match
+    raw match
       case Some("credit") => Right(Credit)
       case Some("debit")  => Right(Debit)
       case _              => Left(BankingError.InvalidAdjustmentDirection)

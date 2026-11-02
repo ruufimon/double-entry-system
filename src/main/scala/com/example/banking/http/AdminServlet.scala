@@ -187,30 +187,39 @@ final class AdminServlet(
       status = 401
       ErrorResponse("unauthorized", "A valid admin bearer token is required")
 
-  private def withInterestRateAdmin(action: => Any): Any =
-    val credentials = Option(request.getHeader("Authorization"))
-      .collect { case header if header.startsWith("Basic ") => header.stripPrefix("Basic ") }
-      .flatMap { encoded =>
-        try
-          val decoded = new String(Base64.getDecoder.decode(encoded), StandardCharsets.UTF_8)
-          decoded.split(":", 2) match
-            case Array("admin", password) => Some(password)
-            case _ => None
-        catch case _: Exception => None
-      }
-
-    val authorized = (adminPassword, credentials) match
-      case (Some(expected), Some(actual)) =>
-        MessageDigest.isEqual(
-          expected.getBytes(StandardCharsets.UTF_8),
-          actual.getBytes(StandardCharsets.UTF_8)
-        )
-      case _ => false
-
-    if authorized then action
+  private def withInterestRateAdmin(operation: => Any): Any =
+    if interestRateService.isEmpty then
+      status = 404
+      ErrorResponse("not_found", "Interest settings are unavailable")
     else
-      response.setHeader("WWW-Authenticate", "Basic realm=\"Admin\"")
-      halt(401, ErrorResponse("unauthorized", "Admin authentication required"))
+      adminPassword.filter(_.nonEmpty) match
+        case None =>
+          status = 503
+          ErrorResponse("admin_auth_not_configured", "Admin password is not configured")
+        case Some(expectedPassword) if !isAuthorized(expectedPassword) =>
+          response.setHeader("WWW-Authenticate", "Basic realm=\"Ledger Admin\", charset=\"UTF-8\"")
+          response.setHeader("Cache-Control", "no-store")
+          status = 401
+          ErrorResponse("admin_auth_required", "A valid admin password is required")
+        case Some(_) =>
+          response.setHeader("Cache-Control", "no-store")
+          operation
+
+  private def isAuthorized(expectedPassword: String): Boolean =
+    Option(request.getHeader("Authorization")).exists { header =>
+      val prefix = "Basic "
+      if !header.startsWith(prefix) then false
+      else
+        try
+          val decoded = new String(Base64.getDecoder.decode(header.substring(prefix.length)), StandardCharsets.UTF_8)
+          val separator = decoded.indexOf(':')
+          separator > 0 && decoded.substring(0, separator) == "admin" &&
+            MessageDigest.isEqual(
+              expectedPassword.getBytes(StandardCharsets.UTF_8),
+              decoded.substring(separator + 1).getBytes(StandardCharsets.UTF_8)
+            )
+        catch case NonFatal(_) => false
+    }
 
   private def parseAdjustmentRequest(): Either[BankingError, AdminAdjustmentRequest] =
     val invalid = BankingError.InvalidRequest(
@@ -226,38 +235,36 @@ final class AdminServlet(
     raw match
       case None => Right(None)
       case Some(value) =>
-        Try(UUID.fromString(value)).toEither match
-          case Right(uuid) => Right(Some(uuid))
-          case Left(_) => Left(BankingError.InvalidRequest(s"Invalid UUID: $value"))
+        Try(UUID.fromString(value)).toOption
+          .filter(_.toString == value.toLowerCase)
+          .map(Some(_))
+          .toRight(BankingError.InvalidRequest("adjustsTransactionId must be a UUID"))
 
   private def parseInterestRateRequest(): Either[BankingError, AdminInterestRateRequest] =
-    val invalid = BankingError.InvalidRequest(
-      "Request body must be a JSON object with rate (a decimal percentage)"
-    )
-    parsedBody match
-      case json: JObject =>
-        try Right(json.extract[AdminInterestRateRequest])
-        catch case NonFatal(_) => Left(invalid)
-      case _ => Left(invalid)
+    try Right(parsedBody.extract[AdminInterestRateRequest])
+    catch
+      case NonFatal(_) =>
+        Left(BankingError.InvalidRequest("Request body must contain a numeric rate"))
 
   private def toSummaryResponse(overview: AccountOverview): AdminAccountSummaryResponse =
     AdminAccountSummaryResponse(
       accountId = overview.account.id.value,
-      currency = "THB",
-      status = "open",
+      currency = Currency.THB.code,
+      status = "active",
       balance = overview.account.balance,
       activityCount = overview.activities.size,
-      lastActivityAt = overview.activities.headOption.map(_.occurredAt.toString)
+      lastActivityAt = overview.activities.lastOption.map(_.occurredAt.toString)
     )
 
   private def toDetailResponse(overview: AccountOverview): AdminAccountDetailResponse =
+    val summary = toSummaryResponse(overview)
     AdminAccountDetailResponse(
-      accountId = overview.account.id.value,
-      currency = "THB",
-      status = "open",
-      balance = overview.account.balance,
-      activityCount = overview.activities.size,
-      lastActivityAt = overview.activities.headOption.map(_.occurredAt.toString),
+      accountId = summary.accountId,
+      currency = summary.currency,
+      status = summary.status,
+      balance = summary.balance,
+      activityCount = summary.activityCount,
+      lastActivityAt = summary.lastActivityAt,
       activities = overview.activities.map(AccountResponseMapping.toActivityResponse)
     )
 
@@ -267,7 +274,7 @@ final class AdminServlet(
       accountId = adjustment.accountId.value,
       direction = adjustment.direction.toString.toLowerCase,
       amount = adjustment.amount.amount,
-      currency = "THB",
+      currency = Currency.THB.code,
       reason = adjustment.memo.reason.value,
       actor = adjustment.memo.actor.value,
       adjustsTransactionId = adjustment.adjustsTransactionId.map(_.toString),
@@ -293,8 +300,10 @@ final class AdminServlet(
       }
     )
 
-  private def errorStatus(error: DomainError): Int = error match
-    case _: BankingError.AccountNotFound => 404
-    case _: BankingError.InsufficientFunds => 422
-    case _: BankingError.InvalidRequest => 400
-    case _: LedgerError => 422
+  private def errorStatus(error: DomainError): Int =
+    error match
+      case BankingError.AccountNotFound(_) |
+          BankingError.AdjustedTransactionNotFound(_) => 404
+      case BankingError.InsufficientFunds(_, _) |
+          LedgerError.DuplicateTransaction(_) => 409
+      case _ => 400

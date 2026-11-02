@@ -34,6 +34,8 @@ final class InMemoryLedgerRepository extends LedgerRepository:
             "Transfers must use atomic transfer posting"
           )
         )
+      else if transaction.operation == BankingOperation.Adjustment then
+        Left(LedgerError.InvalidTransaction("Adjustments must be posted with a memo"))
       else append(transaction)
     }
 
@@ -202,7 +204,8 @@ final class InMemoryLedgerRepository extends LedgerRepository:
               if reversedTransactionIds.contains(transaction.transactionId) then
                 AccountActivityStatus.Reversed
               else AccountActivityStatus.Posted,
-            originalTransactionId = transaction.reversesTransactionId,
+            originalTransactionId =
+              transaction.reversesTransactionId.orElse(transaction.adjustsTransactionId),
             counterpartyAccountId =
               if transaction.operation == BankingOperation.Transfer then
                 transaction.entries.collectFirst {

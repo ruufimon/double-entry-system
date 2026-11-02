@@ -4,7 +4,6 @@ import Api exposing (ApiError)
 import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick)
 import Route
 import View exposing (ariaHidden, ariaLabel)
 
@@ -18,7 +17,7 @@ type alias Model =
 
 
 type Msg
-    = DemoAccountClicked String
+    = NoOp
 
 
 init : Model
@@ -29,8 +28,8 @@ init =
 update : Nav.Key -> Msg -> Model -> ( Model, Cmd Msg )
 update key msg model =
     case msg of
-        DemoAccountClicked accountId ->
-            ( model, Route.push key (Route.Dashboard accountId) )
+        NoOp ->
+            ( model, Cmd.none )
 
 
 view : Model -> Html Msg
@@ -52,14 +51,14 @@ view model =
             , h2 [ id "account-selection-title" ] [ text "Choose an account" ]
             , p [] [ text "Each demo account starts with THB 100.00." ]
             , Html.nav [ class "demo-accounts", ariaLabel "Select a demo account" ]
-                [ button
+                [ a
                     [ class "button button-primary button-block"
-                    , onClick (DemoAccountClicked "acc123")
+                    , Route.href (Route.Dashboard "acc123")
                     ]
                     [ text "acc123 ", span [ ariaHidden ] [ text "→" ] ]
-                , button
+                , a
                     [ class "button button-primary button-block"
-                    , onClick (DemoAccountClicked "acc456")
+                    , Route.href (Route.Dashboard "acc456")
                     ]
                     [ text "acc456 ", span [ ariaHidden ] [ text "→" ] ]
                 ]

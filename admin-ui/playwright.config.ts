@@ -7,6 +7,7 @@ const remoteBaseUrl = stagingUrl
     : `https://${stagingUrl}${stagingUrl.includes('.') ? '' : '.up.railway.app'}`
   : undefined;
 const localBaseUrl = 'http://localhost:4300';
+const adminPassword = process.env['ADMIN_PASSWORD'] ?? 'e2e-only-admin-password';
 
 export default defineConfig({
   testDir: './e2e',
@@ -25,6 +26,7 @@ export default defineConfig({
       command: 'sbt run',
       cwd: '..',
       url: 'http://localhost:8080/ping',
+      env: { ADMIN_PASSWORD: adminPassword },
       reuseExistingServer: !process.env['CI'],
       timeout: 120_000,
     },

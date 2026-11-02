@@ -19,7 +19,11 @@ private[http] object AccountResponseMapping:
         case BankingOperation.Transfer => "transfer_in"
         case BankingOperation.BillPayment         => "bill_payment"
         case BankingOperation.BillPaymentReversal => "bill_payment_reversal"
+<<<<<<< HEAD
         case BankingOperation.Adjustment          => "adjustment",
+=======
+        case BankingOperation.InterestCredit      => "interest_credit",
+>>>>>>> origin/main
       effect = activity.effect match
         case BalanceEffect.Increase => "increase"
         case BalanceEffect.Decrease => "decrease",

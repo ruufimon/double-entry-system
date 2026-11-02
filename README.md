@@ -1,29 +1,27 @@
 # Double-Entry Banking System
 
-A small full-stack banking application built with Scala, Scalatra, and Angular,
-with an Elm port of the customer UI.
+A small full-stack banking application built with Scala, Scalatra, and Angular.
 It demonstrates account deposits, withdrawals, atomic transfers, and event-driven bill payments
 backed by an immutable double-entry ledger.
 
-This project is an educational implementation. All accounts, ledger entries,
-payment processes, and audit records are currently held in memory and are reset
-when the backend restarts.
+This project is an educational implementation. The backend uses H2 and defaults
+to an in-memory database; set `DB_URL` to an H2 file URL to persist accounts,
+ledger entries, rate settings, and interest processing state across restarts.
 
 ## Features
 
-- Idempotent account creation with THB balances
+- Seeded demo accounts `acc123` and `acc456`, each starting at THB 100.00
 - Deposits and withdrawals with amount and balance validation
 - Atomic transfers between existing accounts
 - Immutable, balanced debit and credit ledger entries
 - Account balances derived from ledger transactions
 - Customer-facing account activity history
+- Admin-configurable annual interest rates with monthly ledger credits
 - Two-step bill payment inquiry and confirmation
 - Internal message bus for account charging, settlement, reversal, and auditing
 - Cats-powered validation, non-empty ledger entries, and immutable balance transitions
 - Angular account dashboard and operation flows
-- Elm port of the customer UI, checked against the same Playwright specs
-- Standalone Angular admin console for account operations
-- Audited admin balance adjustments for correcting mistakes
+- Standalone Angular admin console for account operations and interest settings
 - Scala unit and HTTP tests, Angular unit tests, and Playwright E2E coverage
 
 ## Architecture
@@ -40,8 +38,6 @@ the ledger transaction, and the payment process then settles with the biller.
 Failed settlement creates an inverse ledger transaction.
 
 See [spec/LedgerFlow.md](spec/LedgerFlow.md) for the detailed flow diagram.
-Admin corrections are designed in
-[spec/BalanceAdjustment.md](spec/BalanceAdjustment.md).
 
 ## Technology
 
@@ -50,7 +46,6 @@ Admin corrections are designed in
 - Scalatra 3.2.1 and Jetty 12
 - sbt 2.0.9
 - Angular 22
-- Elm 0.19.1, built with Vite
 - Vitest and ScalaTest
 - Playwright with Chromium
 
@@ -66,11 +61,13 @@ Admin corrections are designed in
 Start the backend from the repository root:
 
 ```bash
-sbt run
+ADMIN_PASSWORD=choose-a-local-password sbt run
 ```
 
 The API listens on `http://localhost:8080`. Set the `PORT` environment variable
-to use a different backend port.
+to use a different backend port. Rate settings use HTTP Basic authentication
+with the fixed `admin` username. The admin UI keeps the password in memory for
+the current page session. Use HTTPS outside local development.
 
 ### Database Configuration
 
@@ -83,19 +80,19 @@ PGPORT=5432
 PGDATABASE=banking
 PGUSER=postgres
 PGPASSWORD=your_password
-sbt run
+ADMIN_PASSWORD=choose-a-local-password sbt run
 ```
 
 **PostgreSQL (DATABASE_URL format):**
 ```bash
 DATABASE_URL=postgresql://user:password@localhost:5432/banking
-sbt run
+ADMIN_PASSWORD=choose-a-local-password sbt run
 ```
 
 **H2 file-based (persists across restarts):**
 ```bash
 DB_URL=/path/to/banking
-sbt run
+ADMIN_PASSWORD=choose-a-local-password sbt run
 ```
 
 When PostgreSQL environment variables are set, the app uses PostgreSQL. Otherwise, it falls back to H2 (in-memory by default, or file-based if `DB_URL` is set).
@@ -105,15 +102,6 @@ When PostgreSQL environment variables are set, the app uses PostgreSQL. Otherwis
 **Require PostgreSQL:** Set `DB_REQUIRE_POSTGRES=true` to enforce PostgreSQL in any environment. The API will refuse to start with H2 when this flag is set.
 
 The API logs the selected database at startup: `Database: PostgreSQL at host/db (user: ...)` or `Database: H2 in-memory (banking-uuid)`.
-
-By default the API settles bills with a single in-process demo bill. To pay
-bills through the [fake biller](#fake-biller) over HTTP instead, start it in
-another terminal and point the API at it:
-
-```bash
-sbt runBiller                               # listens on http://localhost:8090
-BILLER_URL=http://localhost:8090 sbt run
-```
 
 In another terminal, install and start the Angular application:
 
@@ -134,15 +122,8 @@ bun install
 bun run start --host localhost --port 4300
 ```
 
-Open `http://localhost:4300`. This educational admin console is read-only and
-has no authentication; do not expose it to untrusted networks.
-
-The [Elm](ui-elm/README.md) customer UI is an alternative to `ui/` with the same
-pages and behavior. It proxies `/api` to the backend on port 8080:
-
-```bash
-cd ui-elm && bun install && bun run start     # http://localhost:4500
-```
+Open `http://localhost:4300`. Account browsing remains part of the demo
+console; the interest-rate settings page requires the configured admin password.
 
 ## API
 
@@ -161,27 +142,16 @@ cd ui-elm && bun install && bun run start     # http://localhost:4500
 | `GET` | `/accounts/:accountId/bill-payments/:paymentId` | Read payment status |
 | `GET` | `/admin/accounts` | List operational summaries for every account |
 | `GET` | `/admin/accounts/:accountId` | Read complete operational account activity |
-| `POST` | `/admin/accounts/:accountId/adjustments` | Correct a balance (admin token required) |
-| `GET` | `/admin/accounts/:accountId/adjustments` | List adjustments with reason and actor (admin token required) |
+| `GET` | `/admin/interest-rate` | Read current and scheduled rates and rate history (HTTP Basic admin auth) |
+| `PUT` | `/admin/interest-rate` | Schedule a global annual rate for next month (HTTP Basic admin auth) |
 
 Account IDs may contain 1–64 letters, numbers, underscores, or hyphens. Monetary
 amounts must be positive and have no more than two decimal places.
 
-Balance adjustments are disabled unless the API starts with `ADMIN_TOKEN` set.
-Requests then need `Authorization: Bearer <token>`, an `X-Admin-Actor` header,
-and a UUID `Idempotency-Key`. See
-[spec/BalanceAdjustment.md](spec/BalanceAdjustment.md) for the full contract.
-
-```bash
-ADMIN_TOKEN=local-admin sbt run
-
-curl -X POST http://localhost:8080/admin/accounts/account-123/adjustments \
-  -H 'Authorization: Bearer local-admin' \
-  -H 'X-Admin-Actor: ops-alice' \
-  -H "Idempotency-Key: $(uuidgen)" \
-  -H 'Content-Type: application/json' \
-  -d '{"direction":"credit","amount":50.00,"reason":"Deposit keyed as 100 instead of 150"}'
-```
+On startup, the API creates the demo accounts if needed and posts their initial
+THB 100.00 balances as ledger deposits. The customer UI home page lets users
+choose between these accounts. The account creation endpoint remains available
+for API use and test setup.
 
 ### Account example
 
@@ -256,83 +226,12 @@ curl \
   http://localhost:8080/accounts/account-123/bill-payments/PAYMENT_ID
 ```
 
-### Fake biller
-
-`com.example.biller.FakeBillerServer` is a standalone HTTP service that plays
-the external biller. The API uses it when `BILLER_URL` is set, through
-`HttpBillerGateway`. It starts with these bills, all under biller code
-`demo-biller` and reference code 1 `customer-001`:
-
-| Reference code 2 | Debt | Behavior | Resulting payment status |
-| --- | --- | --- | --- |
-| `invoice-001` | 100.00 | Settles normally | `completed` |
-| `invoice-002` | 25.00 | Settles normally | `completed` |
-| `invoice-decline` | 40.00 | Settlement returns HTTP 422 | `failed`, charge reversed |
-| `invoice-error` | 40.00 | Settlement returns HTTP 500 | `failed`, charge reversed |
-| `invoice-timeout` | 40.00 | Settlement hangs past the API timeout | `failed`, charge reversed |
-| `invoice-slow` | 60.00 | Responds after 3 seconds | `settling`, then `completed` |
-
-Endpoints:
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/billers/:billerCode/bills?referenceCode1=&referenceCode2=` | Current debt (called by the API) |
-| `POST` | `/billers/:billerCode/payments` | Settle a bill, idempotent on `paymentId` (called by the API) |
-| `GET` | `/admin/bills` | List bills and whether they are paid |
-| `PUT` | `/admin/bills` | Add or replace a bill |
-| `DELETE` | `/admin/bills/:billerCode/:referenceCode1/:referenceCode2` | Remove a bill |
-| `POST` | `/admin/reset` | Restore the starting bills, all unpaid |
-| `GET`, `PUT` | `/admin/config` | Read or set the default latency in milliseconds |
-
-`PUT /admin/bills` accepts an optional `scenario` (`ok`, `settle_declined`,
-`settle_error`, `settle_timeout`, or `inquiry_error`), `latencyMs`, and `paid`:
-
-```bash
-curl -X PUT http://localhost:8090/admin/bills \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "billerCode":"water-co",
-    "referenceCode1":"meter-42",
-    "referenceCode2":"2026-10",
-    "amount":12.50,
-    "scenario":"settle_declined",
-    "latencyMs":1500
-  }'
-
-curl -X PUT http://localhost:8090/admin/config \
-  -H 'Content-Type: application/json' -d '{"latencyMs":500}'
-
-curl -X POST http://localhost:8090/admin/reset
-```
-
-| Variable | Service | Default | Purpose |
-| --- | --- | --- | --- |
-| `BILLER_URL` | API | unset | Fake biller base URL; unset keeps the in-process biller |
-| `BILLER_TIMEOUT_MS` | API | `5000` | Connect and request timeout for biller calls |
-| `BILLER_PORT` | Biller | `8090` | Listening port |
-| `BILLER_LATENCY_MS` | Biller | `0` | Default latency for bills without their own `latencyMs` |
-
-The biller is called from the API's single message-bus thread, so a slow or
-hanging settlement delays other queued payment events until it returns or times
-out. The `settle_timeout` scenario never marks the bill paid. A real biller that
-records a payment after the API has timed out would leave the bill paid while
-the API reverses the charge. That needs reconciliation, which this demo leaves
-out.
-
 ## Tests
 
 Run the backend test suite:
 
 ```bash
 sbt test
-```
-
-Acceptance specs in `src/test/scala/com/example/acceptance/` start the real
-API and check a feature end to end. Each one links to its design in `spec/`.
-Run only those:
-
-```bash
-sbt "testOnly com.example.acceptance.*"
 ```
 
 Run Angular unit tests and a production build:
@@ -352,17 +251,8 @@ bun run build
 bun run e2e
 ```
 
-The Elm customer UI has the same `test` and `build` scripts. Its tests run on
-elm-test:
-
-```bash
-cd ui-elm
-bun run test
-bun run build
-```
-
 Use `bun run test`, not `bun test`: the latter runs Bun's own test runner
-instead of each project's configured tests.
+instead of the Angular (Vitest) tests.
 
 Install Playwright's Chromium binary once, then run the full-stack E2E test:
 
@@ -373,14 +263,7 @@ bun run e2e
 ```
 
 Playwright starts the backend and frontend automatically when they are not
-already running. The same specs cover the Elm customer UI. Set
-`E2E_APP=ui-elm` to start its dev server instead of Angular. Install its
-dependencies first:
-
-```bash
-cd ui
-E2E_APP=ui-elm bun run e2e
-```
+already running.
 
 To verify a deployed Railway environment, open **Actions → Staging E2E → Run
 workflow** and enter the public customer and admin UI URLs. The workflow sends
@@ -417,14 +300,16 @@ every deploy or restart to reset accounts and ledger entries.
 
 ### Docker
 
-Run the API, the [fake biller](#fake-biller), and all UIs with Docker Compose.
-Open the customer application at `http://localhost:4200` (Angular) or
-`http://localhost:4500` (Elm), and the admin console at `http://localhost:4300`.
-The fake biller's admin API is on `http://localhost:8090`:
+Run the API and both UIs with Docker Compose. Open the customer application at
+`http://localhost:4200` and the admin console at `http://localhost:4300`:
 
 ```bash
+export ADMIN_PASSWORD=choose-a-local-password
 docker compose up --build
 ```
+
+Compose requires `ADMIN_PASSWORD` for the protected interest-rate settings.
+You can also put it in an untracked `.env` file beside `docker-compose.yml`.
 
 Compose runs the [native API image](#native-api-image-graalvm). The UI image
 ([`Dockerfile.ui`](Dockerfile.ui)) builds the Angular app and serves it with
@@ -446,34 +331,23 @@ docker build -f Dockerfile.admin-ui -t banking-admin-ui .
 docker run --rm -p 4300:8080 -e API_URL=http://host.docker.internal:8080 banking-admin-ui
 ```
 
-[`Dockerfile.ui-elm`](Dockerfile.ui-elm) packages the Elm UI the same way. Elm
-0.19.1 has no Linux ARM compiler, so the Elm build stage runs as `linux/amd64`. On Apple Silicon Docker
-emulates that stage, which makes it slower. The final nginx image is native.
-
 ### Railway
 
-Create a PostgreSQL database and three services from this repository:
+Create three services from this repository and set these variables:
 
 | Service | Variable | Value |
 | --- | --- | --- |
 | API | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.native` |
 | API | `PORT` | `8080` |
-| API | `PGHOST` | `${{Postgres.PGHOST}}` (reference variable) |
-| API | `PGPORT` | `${{Postgres.PGPORT}}` |
-| API | `PGDATABASE` | `${{Postgres.PGDATABASE}}` |
-| API | `PGUSER` | `${{Postgres.PGUSER}}` |
-| API | `PGPASSWORD` | `${{Postgres.PGPASSWORD}}` |
 | UI | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.ui` |
 | UI | `API_URL` | `http://${{API.RAILWAY_PRIVATE_DOMAIN}}:8080` |
 | Admin UI | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.admin-ui` |
 | Admin UI | `API_URL` | `http://${{API.RAILWAY_PRIVATE_DOMAIN}}:8080` |
 
-Replace `API` and `Postgres` in the reference variables with the service names in Railway.
+Replace `API` in the reference variable with the API service's name in Railway.
 Generate public domains for the UI services only; the API stays on Railway's
 private network. If either UI cannot reach the API privately, generate a public
 domain for the API too and set `API_URL` to that `https://` URL instead.
-
-The API detects PostgreSQL when the `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/`PGPASSWORD` variables are set (Railway's reference variables) or when `DATABASE_URL` is provided in `postgresql://` format. Flyway applies schema migrations automatically on startup.
 
 ### Native API image (GraalVM)
 
@@ -512,14 +386,11 @@ in the native image but not on the JVM.
 
 ```text
 src/main/scala/com/example/banking/      Account, ledger, messaging, and HTTP code
-src/main/scala/com/example/billpayment/  Bill-payment workflow and biller adapters
-src/main/scala/com/example/biller/       Fake biller HTTP service for demos
+src/main/scala/com/example/billpayment/  Bill-payment workflow and biller adapter
 src/test/scala/                          Backend tests
-src/test/scala/com/example/acceptance/   Feature acceptance specs (ATDD)
 ui/                                     Angular application and Playwright tests
 admin-ui/                               Standalone Angular admin application
-ui-elm/                                 Elm port of the customer UI
-spec/                                   Architecture and feature design docs
+spec/                                   Architecture documentation
 ```
 
 ## License

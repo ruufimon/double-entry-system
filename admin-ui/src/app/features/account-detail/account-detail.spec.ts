@@ -78,6 +78,37 @@ describe('AccountDetail', () => {
     expect(rows[1].textContent).toContain('transaction-1');
   });
 
+  it('labels a monthly interest credit in account activity', () => {
+    const fixture = TestBed.createComponent(AccountDetail);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/admin/accounts/account-123')
+      .flush({
+        ...detail,
+        balance: 80,
+        activityCount: 3,
+        activities: [
+          ...detail.activities,
+          {
+            transactionId: 'interest-2026-11',
+            operation: 'interest_credit',
+            effect: 'increase',
+            amount: 5,
+            currency: 'THB',
+            balanceAfter: 80,
+            occurredAt: '2026-10-31T16:59:59Z',
+            status: 'posted',
+            originalTransactionId: null,
+            counterpartyAccountId: null,
+          },
+        ],
+      });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Monthly interest');
+    expect(fixture.nativeElement.textContent).toContain('+฿5.00');
+  });
+
   it('shows the API error for a missing account', () => {
     const fixture = TestBed.createComponent(AccountDetail);
     fixture.detectChanges();

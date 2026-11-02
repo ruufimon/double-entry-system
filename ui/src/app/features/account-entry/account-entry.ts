@@ -1,13 +1,9 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
-
-import { ApiError, toApiError } from '../../core/api/api-error';
-import { BankingApiService } from '../../core/api/banking-api.service';
+import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-account-entry',
-  imports: [ReactiveFormsModule],
+  imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="hero-grid">
@@ -25,69 +21,20 @@ import { BankingApiService } from '../../core/api/banking-api.service';
         </div>
       </div>
 
-      <form class="card account-card" [formGroup]="form" (ngSubmit)="openAccount()">
-        <p class="step-label">Start here</p>
-        <h2>Open an account</h2>
-        <p>Enter an account ID. A new account is created by making its first deposit.</p>
-
-        <label for="account-id">Account ID</label>
-        <input
-          id="account-id"
-          type="text"
-          autocomplete="username"
-          placeholder="e.g. account-123"
-          [formControl]="accountId"
-        >
-        @if (accountId.invalid && accountId.touched) {
-          <p class="field-error">Use 1–64 letters, numbers, underscores, or hyphens.</p>
-        }
-        @if (error()) {
-          <div class="notice notice-error compact" role="alert">
-            <div><strong>{{ error()?.code }}</strong><span>{{ error()?.message }}</span></div>
-          </div>
-        }
-
-        <button class="button button-primary button-block" type="submit" [disabled]="accountId.invalid || submitting()">
-          {{ submitting() ? 'Opening account…' : 'Continue to account' }}
-          <span aria-hidden="true">→</span>
-        </button>
-        <p class="demo-hint">Try <button type="button" (click)="useDemoAccount()">account-123</button></p>
-      </form>
+      <section class="card account-card" aria-labelledby="account-selection-title">
+        <p class="step-label">Demo accounts</p>
+        <h2 id="account-selection-title">Choose an account</h2>
+        <p>Each demo account starts with THB 100.00.</p>
+        <nav class="demo-accounts" aria-label="Select a demo account">
+          <a class="button button-primary button-block" routerLink="/accounts/acc123">
+            acc123 <span aria-hidden="true">→</span>
+          </a>
+          <a class="button button-primary button-block" routerLink="/accounts/acc456">
+            acc456 <span aria-hidden="true">→</span>
+          </a>
+        </nav>
+      </section>
     </section>
   `,
 })
-export class AccountEntry {
-  private readonly router = inject(Router);
-  private readonly api = inject(BankingApiService);
-
-  readonly accountId = new FormControl('', {
-    nonNullable: true,
-    validators: [Validators.required, Validators.pattern(/^[A-Za-z0-9_-]{1,64}$/)],
-  });
-  readonly form = new FormGroup({ accountId: this.accountId });
-  readonly submitting = signal(false);
-  readonly error = signal<ApiError | null>(null);
-
-  openAccount(): void {
-    this.accountId.markAsTouched();
-    if (this.accountId.invalid) {
-      return;
-    }
-
-    const accountId = this.accountId.value.trim();
-    this.submitting.set(true);
-    this.error.set(null);
-    this.api.openAccount(accountId).subscribe({
-      next: () => void this.router.navigate(['/accounts', accountId]),
-      error: (error: unknown) => {
-        this.error.set(toApiError(error));
-        this.submitting.set(false);
-      },
-    });
-  }
-
-  useDemoAccount(): void {
-    this.accountId.setValue('account-123');
-    this.openAccount();
-  }
-}
+export class AccountEntry {}

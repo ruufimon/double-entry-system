@@ -128,6 +128,36 @@ describe('AccountDashboard', () => {
     expect(activityRows[1].textContent).toContain('+฿100.00');
   });
 
+  it('labels monthly interest credits in customer activity', () => {
+    const fixture = TestBed.createComponent(AccountDashboard);
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/accounts/account-123/overview')
+      .flush({
+        ...initialOverview,
+        balance: 101,
+        activities: [
+          ...initialOverview.activities,
+          {
+            transactionId: 'interest-transaction',
+            operation: 'interest_credit',
+            effect: 'increase',
+            amount: 1,
+            currency: 'THB',
+            balanceAfter: 101,
+            occurredAt: '2026-10-31T16:59:59Z',
+            status: 'posted',
+            originalTransactionId: null,
+            counterpartyAccountId: null,
+          },
+        ],
+      });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Monthly interest');
+    expect(fixture.nativeElement.textContent).toContain('+฿1.00');
+  });
+
   it('renders an empty activity list when an older API omits activities', () => {
     const fixture = TestBed.createComponent(AccountDashboard);
     fixture.detectChanges();

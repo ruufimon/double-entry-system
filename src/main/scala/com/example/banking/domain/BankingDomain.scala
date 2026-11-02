@@ -180,7 +180,11 @@ final case class BalanceAdjusted(adjustment: BalanceAdjustment) extends DomainEv
   override def occurredAt: Instant = adjustment.occurredAt
 
 enum BankingOperation derives CanEqual:
+<<<<<<< HEAD
   case Deposit, Withdrawal, Transfer, BillPayment, BillPaymentReversal, Adjustment
+=======
+  case Deposit, Withdrawal, Transfer, BillPayment, BillPaymentReversal, InterestCredit
+>>>>>>> origin/main
 
 object BankingOperation:
   def unsafe(name: String): BankingOperation = BankingOperation.valueOf(name)

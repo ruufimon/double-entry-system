@@ -14,7 +14,7 @@ test('lists accounts and opens complete operational detail', async ({ page, requ
   expect(withdrawn.ok()).toBe(true);
 
   await page.goto('/accounts');
-  await expect(page.getByText('Unauthenticated demo admin')).toBeVisible();
+  await expect(page.getByText('Demo operations console')).toBeVisible();
 
   const row = page.getByRole('row').filter({ hasText: accountId });
   await expect(row).toContainText('฿100.00');

@@ -1,4 +1,4 @@
-# Runs the API, fake biller, customer UIs (Angular, Elm), and admin UI together.
+# Runs the API, customer UI, and admin UI together.
 services:
   api:
     build:
@@ -6,20 +6,7 @@ services:
       dockerfile: Dockerfile.native
     image: banking-api:native
     environment:
-      BILLER_URL: http://biller:8090
-    depends_on:
-      biller:
-        condition: service_started
-
-  # Fake external biller. Its admin API on port 8090 reseeds bills and sets
-  # failure scenarios and latency.
-  biller:
-    build:
-      context: .
-      dockerfile: Dockerfile.biller
-    image: banking-fake-biller:local
-    ports:
-      - "8090:8090"
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in your shell or .env file}
 
   ui:
     build:
@@ -33,19 +20,6 @@ services:
     depends_on:
       # The distroless native image has no shell or curl for a health check,
       # and it starts in milliseconds.
-      api:
-        condition: service_started
-
-  ui-elm:
-    build:
-      context: .
-      dockerfile: Dockerfile.ui-elm
-    image: banking-ui-elm:local
-    environment:
-      API_URL: http://api:8080
-    ports:
-      - "4500:8080"
-    depends_on:
       api:
         condition: service_started
 

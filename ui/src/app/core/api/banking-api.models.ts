@@ -15,7 +15,7 @@ export type BankingOperation =
   | 'transfer_in'
   | 'bill_payment'
   | 'bill_payment_reversal'
-  | 'adjustment';
+  | 'interest_credit';
 
 export interface AccountActivity {
   transactionId: string;

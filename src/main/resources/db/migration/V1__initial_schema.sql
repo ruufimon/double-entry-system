@@ -78,3 +78,18 @@ CREATE TABLE IF NOT EXISTS bill_payment_processes (
   updated_at TIMESTAMP NOT NULL,
   PRIMARY KEY (payment_id)
 );
+
+CREATE TABLE IF NOT EXISTS interest_rate_history (
+  rate_id BIGSERIAL,
+  rate_basis_points BIGINT NOT NULL,
+  effective_from DATE NOT NULL,
+  created_at TIMESTAMP NOT NULL,
+  updated_by VARCHAR(256) NOT NULL,
+  PRIMARY KEY (rate_id)
+);
+
+CREATE TABLE IF NOT EXISTS interest_processing_state (
+  state_id INT NOT NULL,
+  next_period_start DATE NOT NULL,
+  PRIMARY KEY (state_id)
+);

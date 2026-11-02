@@ -37,7 +37,7 @@ final class BalanceAdjustmentAcceptanceSpec
 
   override protected def beforeEach(): Unit =
     super.beforeEach()
-    apiServer = Server.create(0, billerUrl = None, adminToken = Some(AdminToken))
+    apiServer = Server.create(0, billerUrl = None, adminToken = Some(AdminToken), adminPassword = None, clock = Clock.systemUTC(), businessZone = java.time.ZoneId.of("Asia/Bangkok"))
     apiServer.start()
 
   override protected def afterEach(): Unit =

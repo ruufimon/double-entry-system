@@ -1,4 +1,5 @@
 package com.example
+import java.time.Clock
 
 import java.net.URI
 import java.net.http.HttpClient
@@ -167,7 +168,7 @@ final class ServerIntegrationSpec extends AnyFunSuite with Matchers with BeforeA
     billerServer.start()
     try
       apiServer.close()
-      apiServer = Server.create(0, Some(s"http://127.0.0.1:${billerServer.port}"))
+      apiServer = Server.create(0, billerUrl = Some(s"http://127.0.0.1:${billerServer.port}"), adminToken = None, adminPassword = None, clock = Clock.systemUTC(), businessZone = java.time.ZoneId.of("Asia/Bangkok"))
       apiServer.start()
       testBody
     finally billerServer.close()

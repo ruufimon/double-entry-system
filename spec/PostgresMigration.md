@@ -41,6 +41,8 @@ banking standards study. Retiring `render.yaml` is a later decision.
 6. The API contract is unchanged: amounts, ids and timestamps keep their JSON format.
 7. The native image starts against Postgres on Railway `pre-production`.
 8. Data survives a service restart in `pre-production`.
+   In `pre-production` and `production` (`RAILWAY_ENVIRONMENT` or `DB_REQUIRE_POSTGRES=true` set), the app
+   refuses to start without Postgres config instead of falling back to H2.
 9. Playwright passes on the Angular and Elm UIs against `pre-production`.
 
 ## Release Order

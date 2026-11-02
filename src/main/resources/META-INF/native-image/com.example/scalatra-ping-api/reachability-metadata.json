@@ -1448,7 +1448,7 @@
       "queryAllPublicMethods": true
     },
     {
-      "type": "org.flywaydb.database.postgresql.PostgreSQLConfigurationExtension$TransactionalModel",
+      "type": "org.flywaydb.database.postgresql.TransactionalModel",
       "allDeclaredConstructors": true,
       "allDeclaredMethods": true,
       "allDeclaredFields": true,
@@ -1904,7 +1904,7 @@
       "name": "org.flywaydb.database.postgresql.PostgreSQLConfigurationExtension"
     },
     {
-      "name": "org.flywaydb.database.postgresql.PostgreSQLConfigurationExtension$TransactionalModel"
+      "name": "org.flywaydb.database.postgresql.TransactionalModel"
     },
     {
       "name": "org.flywaydb.database.h2.H2ConfigurationExtension"

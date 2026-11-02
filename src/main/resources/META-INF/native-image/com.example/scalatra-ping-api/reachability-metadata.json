@@ -1438,6 +1438,7 @@
     },
     {
       "type": "org.flywaydb.database.postgresql.PostgreSQLConfigurationExtension",
+      "unsafeAllocated": true,
       "allDeclaredConstructors": true,
       "allDeclaredMethods": true,
       "allDeclaredFields": true,
@@ -1445,28 +1446,11 @@
       "allPublicMethods": true,
       "allPublicFields": true,
       "queryAllDeclaredMethods": true,
-      "queryAllPublicMethods": true,
-      "methods": [
-        {
-          "name": "getNamespace",
-          "parameterTypes": []
-        },
-        {
-          "name": "getTransactional",
-          "parameterTypes": []
-        },
-        {
-          "name": "setTransactional",
-          "parameterTypes": ["org.flywaydb.database.postgresql.TransactionalModel"]
-        },
-        {
-          "name": "copy",
-          "parameterTypes": []
-        }
-      ]
+      "queryAllPublicMethods": true
     },
     {
       "type": "org.flywaydb.database.postgresql.TransactionalModel",
+      "unsafeAllocated": true,
       "allDeclaredConstructors": true,
       "allDeclaredMethods": true,
       "allDeclaredFields": true,
@@ -1487,6 +1471,7 @@
     },
     {
       "type": "org.flywaydb.database.h2.H2ConfigurationExtension",
+      "unsafeAllocated": true,
       "allDeclaredConstructors": true,
       "allDeclaredMethods": true,
       "allDeclaredFields": true,
@@ -1494,20 +1479,11 @@
       "allPublicMethods": true,
       "allPublicFields": true,
       "queryAllDeclaredMethods": true,
-      "queryAllPublicMethods": true,
-      "methods": [
-        {
-          "name": "getNamespace",
-          "parameterTypes": []
-        },
-        {
-          "name": "copy",
-          "parameterTypes": []
-        }
-      ]
+      "queryAllPublicMethods": true
     },
     {
       "type": "org.flywaydb.core.internal.command.clean.CleanModeConfigurationExtension",
+      "unsafeAllocated": true,
       "allDeclaredConstructors": true,
       "allDeclaredMethods": true,
       "allDeclaredFields": true,
@@ -1515,28 +1491,11 @@
       "allPublicMethods": true,
       "allPublicFields": true,
       "queryAllDeclaredMethods": true,
-      "queryAllPublicMethods": true,
-      "methods": [
-        {
-          "name": "getNamespace",
-          "parameterTypes": []
-        },
-        {
-          "name": "getClean",
-          "parameterTypes": []
-        },
-        {
-          "name": "setClean",
-          "parameterTypes": ["org.flywaydb.core.internal.command.clean.CleanModel"]
-        },
-        {
-          "name": "copy",
-          "parameterTypes": []
-        }
-      ]
+      "queryAllPublicMethods": true
     },
     {
       "type": "org.flywaydb.core.internal.command.clean.CleanModel",
+      "unsafeAllocated": true,
       "allDeclaredConstructors": true,
       "allDeclaredMethods": true,
       "allDeclaredFields": true,
@@ -1548,6 +1507,7 @@
     },
     {
       "type": "org.flywaydb.core.extensibility.ConfigurationExtension",
+      "unsafeAllocated": true,
       "allDeclaredConstructors": true,
       "allDeclaredMethods": true,
       "allDeclaredFields": true,
@@ -1555,17 +1515,7 @@
       "allPublicMethods": true,
       "allPublicFields": true,
       "queryAllDeclaredMethods": true,
-      "queryAllPublicMethods": true,
-      "methods": [
-        {
-          "name": "getNamespace",
-          "parameterTypes": []
-        },
-        {
-          "name": "copy",
-          "parameterTypes": []
-        }
-      ]
+      "queryAllPublicMethods": true
     },
     {
       "type": "org.flywaydb.core.internal.license.FlywayEditionUpgradeRequiredException",

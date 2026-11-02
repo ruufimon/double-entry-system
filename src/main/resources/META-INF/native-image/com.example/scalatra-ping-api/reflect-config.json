@@ -88,5 +88,14 @@
     "allPublicConstructors": true,
     "allPublicMethods": true,
     "allPublicFields": true
+  },
+  {
+    "name": "org.flywaydb.core.api.migration.baseline.BaselineMigrationConfigurationExtension",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true,
+    "allPublicConstructors": true,
+    "allPublicMethods": true,
+    "allPublicFields": true
   }
 ]

@@ -100,6 +100,12 @@ sbt run
 
 When PostgreSQL environment variables are set, the app uses PostgreSQL. Otherwise, it falls back to H2 (in-memory by default, or file-based if `DB_URL` is set).
 
+**Railway Protection:** On Railway (when `RAILWAY_ENVIRONMENT` is set), PostgreSQL is required. The API will fail fast at startup if PostgreSQL configuration is missing, preventing silent fallback to H2 which would lose data on restart.
+
+**Require PostgreSQL:** Set `DB_REQUIRE_POSTGRES=true` to enforce PostgreSQL in any environment. The API will refuse to start with H2 when this flag is set.
+
+The API logs the selected database at startup: `Database: PostgreSQL at host/db (user: ...)` or `Database: H2 in-memory (banking-uuid)`.
+
 By default the API settles bills with a single in-process demo bill. To pay
 bills through the [fake biller](#fake-biller) over HTTP instead, start it in
 another terminal and point the API at it:

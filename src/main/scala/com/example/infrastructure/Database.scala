@@ -8,6 +8,28 @@ import scala.util.Using
 import com.zaxxer.hikari.HikariDataSource
 import org.flywaydb.core.Flyway
 
+enum DatabaseVendor:
+  case H2, PostgreSQL
+
+final case class DatabaseConfig(
+    vendor: DatabaseVendor,
+    jdbcUrl: String,
+    user: String,
+    password: String,
+    host: Option[String] = None,
+    database: Option[String] = None
+)
+
+enum DatabaseSelectionError(val message: String):
+  case PostgresRequiredOnRailway(railwayEnv: String)
+      extends DatabaseSelectionError(
+        s"PostgreSQL is required on Railway (RAILWAY_ENVIRONMENT=$railwayEnv) but no PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD or DATABASE_URL is set"
+      )
+  case PostgresRequiredByConfig
+      extends DatabaseSelectionError(
+        "PostgreSQL is required (DB_REQUIRE_POSTGRES=true) but no PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD or DATABASE_URL is set"
+      )
+
 object Database:
   def h2Url(path: String): String =
     s"jdbc:h2:file:$path;DB_CLOSE_DELAY=-1"
@@ -22,7 +44,10 @@ object Database:
     if !url.startsWith("postgresql://") && !url.startsWith("postgres://") then None
     else
       try
-        val uri = new URI(url.stripPrefix("postgres://").replace("postgres://", "postgresql://"))
+        val normalizedUrl = if url.startsWith("postgres://") then 
+          url.replace("postgres://", "postgresql://") 
+        else url
+        val uri = new URI(normalizedUrl)
         val userInfo = Option(uri.getUserInfo).map(_.split(":", 2))
         val user = userInfo.flatMap(_.headOption)
         val password = userInfo.flatMap(_.lift(1))
@@ -32,13 +57,79 @@ object Database:
           case _ => None
       catch case _: Exception => None
 
-  def open(url: String, user: String = DatabaseConfig.DefaultUser, password: String = DatabaseConfig.DefaultPassword): Database =
+  /** Pure database selection logic that can be tested without side effects. */
+  def selectDatabase(
+      pgHost: Option[String],
+      pgPort: Option[String],
+      pgDatabase: Option[String],
+      pgUser: Option[String],
+      pgPassword: Option[String],
+      databaseUrl: Option[String],
+      dbUrl: Option[String],
+      dbUser: Option[String],
+      dbPassword: Option[String],
+      railwayEnvironment: Option[String],
+      requirePostgres: Boolean
+  ): Either[DatabaseSelectionError, DatabaseConfig] =
+    val defaultUser = "banking"
+    val defaultPassword = "banking"
+
+    // Try PG* environment variables first
+    val pgConfig = for
+      host <- pgHost
+      portStr <- pgPort
+      port <- portStr.toIntOption
+      database <- pgDatabase
+      user <- pgUser
+      password <- pgPassword
+    yield DatabaseConfig(
+      vendor = DatabaseVendor.PostgreSQL,
+      jdbcUrl = postgresUrl(host, port, database),
+      user = user,
+      password = password,
+      host = Some(host),
+      database = Some(database)
+    )
+
+    // Try DATABASE_URL as fallback
+    val databaseUrlConfig = pgConfig.orElse {
+      databaseUrl.flatMap { url =>
+        parsePostgresUrl(url).map { case (host, port, db, user, password) =>
+          DatabaseConfig(
+            vendor = DatabaseVendor.PostgreSQL,
+            jdbcUrl = postgresUrl(host, port, db),
+            user = user,
+            password = password,
+            host = Some(host),
+            database = Some(db)
+          )
+        }
+      }
+    }
+
+    // Check if PostgreSQL is required but not configured
+    databaseUrlConfig match
+      case Some(config) => Right(config)
+      case None =>
+        if railwayEnvironment.isDefined then
+          Left(DatabaseSelectionError.PostgresRequiredOnRailway(railwayEnvironment.get))
+        else if requirePostgres then
+          Left(DatabaseSelectionError.PostgresRequiredByConfig)
+        else
+          // Fall back to H2
+          val h2Url = dbUrl.getOrElse(h2MemoryUrl(s"banking-${java.util.UUID.randomUUID()}"))
+          Right(
+            DatabaseConfig(
+              vendor = DatabaseVendor.H2,
+              jdbcUrl = h2Url,
+              user = dbUser.getOrElse(defaultUser),
+              password = dbPassword.getOrElse(defaultPassword)
+            )
+          )
+
+  def open(url: String, user: String = "banking", password: String = "banking"): Database =
     Schema.migrate(url, user, password)
     new Database(url, user, password)
-
-object DatabaseConfig:
-  val DefaultUser = "banking"
-  val DefaultPassword = "banking"
 
 object Schema:
   def migrate(url: String, user: String, password: String): Unit =
@@ -50,8 +141,8 @@ object Schema:
 
 final class Database(
     val url: String,
-    val user: String = DatabaseConfig.DefaultUser,
-    val password: String = DatabaseConfig.DefaultPassword
+    val user: String = "banking",
+    val password: String = "banking"
 ) extends AutoCloseable:
   val dataSource: HikariDataSource =
     val hikariDataSource = new HikariDataSource()

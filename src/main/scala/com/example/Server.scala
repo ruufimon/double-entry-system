@@ -29,7 +29,7 @@ import com.example.billpayment.infrastructure.{
   InMemoryBillerGateway
 }
 import com.example.billpayment.ports.BillerGateway
-import com.example.infrastructure.{Database, DatabaseConfig}
+import com.example.infrastructure.{Database, DatabaseConfig, DatabaseVendor}
 import org.eclipse.jetty.ee11.servlet.{ServletContextHandler, ServletHolder}
 import org.eclipse.jetty.server.{NetworkConnector, Server as JettyServer}
 
@@ -67,32 +67,44 @@ object Server:
   /** Reads database configuration from the process environment.
     * Prefers PostgreSQL when PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD are set.
     * Falls back to DATABASE_URL in postgresql:// format.
+    * On Railway (RAILWAY_ENVIRONMENT set), PostgreSQL is required and H2 fallback is disabled.
+    * Set DB_REQUIRE_POSTGRES=true to enforce PostgreSQL in any environment.
     * Otherwise uses H2 in-memory (or file-based if DB_URL is set).
     */
   def databaseFromEnv(): (String, String, String) =
-    val pgConfig = for
-      host <- sys.env.get("PGHOST")
-      port <- sys.env.get("PGPORT").flatMap(_.toIntOption)
-      database <- sys.env.get("PGDATABASE")
-      user <- sys.env.get("PGUSER")
-      password <- sys.env.get("PGPASSWORD")
-    yield (Database.postgresUrl(host, port, database), user, password)
+    val requirePostgres = sys.env.get("DB_REQUIRE_POSTGRES").contains("true")
+    
+    val config = Database.selectDatabase(
+      pgHost = sys.env.get("PGHOST"),
+      pgPort = sys.env.get("PGPORT"),
+      pgDatabase = sys.env.get("PGDATABASE"),
+      pgUser = sys.env.get("PGUSER"),
+      pgPassword = sys.env.get("PGPASSWORD"),
+      databaseUrl = sys.env.get("DATABASE_URL"),
+      dbUrl = sys.env.get("DB_URL"),
+      dbUser = sys.env.get("DB_USER"),
+      dbPassword = sys.env.get("DB_PASSWORD"),
+      railwayEnvironment = sys.env.get("RAILWAY_ENVIRONMENT"),
+      requirePostgres = requirePostgres
+    ) match
+      case Right(cfg) =>
+        logDatabaseSelection(cfg)
+        cfg
+      case Left(error) =>
+        System.err.println(s"Database configuration error: ${error.message}")
+        throw new IllegalStateException(error.message)
+    
+    (config.jdbcUrl, config.user, config.password)
 
-    pgConfig.orElse {
-      sys.env.get("DATABASE_URL").flatMap { url =>
-        Database.parsePostgresUrl(url).map { case (host, port, db, user, password) =>
-          (Database.postgresUrl(host, port, db), user, password)
-        }
-      }
-    }.getOrElse {
-      (
-        sys.env
-          .get("DB_URL")
-          .getOrElse(Database.h2MemoryUrl(s"banking-${UUID.randomUUID()}")),
-        sys.env.get("DB_USER").getOrElse(DatabaseConfig.DefaultUser),
-        sys.env.get("DB_PASSWORD").getOrElse(DatabaseConfig.DefaultPassword)
-      )
-    }
+  private def logDatabaseSelection(config: DatabaseConfig): Unit =
+    config.vendor match
+      case DatabaseVendor.PostgreSQL =>
+        val hostInfo = config.host.map(h => s"$h/${config.database.getOrElse("?")}").getOrElse("?")
+        println(s"Database: PostgreSQL at $hostInfo (user: ${config.user})")
+      case DatabaseVendor.H2 =>
+        val dbType = if config.jdbcUrl.contains(":mem:") then "in-memory" else "file-based"
+        val dbName = config.jdbcUrl.split(":").lastOption.getOrElse("?").takeWhile(_ != ';')
+        println(s"Database: H2 $dbType ($dbName)")
 
   private[example] def create(port: Int): BankingApiServer =
     create(port, sys.env.get("BILLER_URL").filter(_.nonEmpty))

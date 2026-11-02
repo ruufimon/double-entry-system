@@ -97,13 +97,11 @@ enum AdjustmentDirection derives CanEqual:
   case Credit, Debit
 
 object AdjustmentDirection:
-  def from(rawDirection: Option[String]): Either[BankingError, AdjustmentDirection] =
-    rawDirection match
-      case Some("credit") => Right(AdjustmentDirection.Credit)
-      case Some("debit")  => Right(AdjustmentDirection.Debit)
+  def from(raw: Option[String]): Either[BankingError, AdjustmentDirection] =
+    raw.map(_.trim.toLowerCase) match
+      case Some("credit") => Right(Credit)
+      case Some("debit")  => Right(Debit)
       case _              => Left(BankingError.InvalidAdjustmentDirection)
-
-  def unsafe(name: String): AdjustmentDirection = AdjustmentDirection.valueOf(name)
 
 final case class AdjustmentReason private (value: String) derives CanEqual
 
@@ -118,7 +116,6 @@ object AdjustmentReason:
       Left(BankingError.InvalidAdjustmentReason(s"Reason must be at most $MaxLength characters"))
     else Right(AdjustmentReason(reason))
 
-  /** Constructs from an already-validated value (trusted persisted data). */
   def unsafe(value: String): AdjustmentReason = AdjustmentReason(value)
 
 final case class AdminActor private (value: String) derives CanEqual
@@ -133,10 +130,8 @@ object AdminActor:
       .map(AdminActor.apply)
       .toRight(BankingError.MissingAdminActor)
 
-  /** Constructs from an already-validated value (trusted persisted data). */
   def unsafe(value: String): AdminActor = AdminActor(value)
 
-/** Who made an adjustment and why; stored alongside its ledger transaction. */
 final case class AdjustmentMemo(reason: AdjustmentReason, actor: AdminActor) derives CanEqual
 
 final case class BalanceAdjustment(
@@ -180,11 +175,7 @@ final case class BalanceAdjusted(adjustment: BalanceAdjustment) extends DomainEv
   override def occurredAt: Instant = adjustment.occurredAt
 
 enum BankingOperation derives CanEqual:
-<<<<<<< HEAD
-  case Deposit, Withdrawal, Transfer, BillPayment, BillPaymentReversal, Adjustment
-=======
-  case Deposit, Withdrawal, Transfer, BillPayment, BillPaymentReversal, InterestCredit
->>>>>>> origin/main
+  case Deposit, Withdrawal, Transfer, BillPayment, BillPaymentReversal, InterestCredit, Adjustment
 
 object BankingOperation:
   def unsafe(name: String): BankingOperation = BankingOperation.valueOf(name)
@@ -280,7 +271,7 @@ enum BankingError(val code: String, val message: String) extends DomainError der
   case InvalidAdjustmentDirection
       extends BankingError(
         "invalid_adjustment_direction",
-        "Adjustment direction must be 'credit' or 'debit'"
+        "Direction must be 'credit' or 'debit'"
       )
   case InvalidAdjustmentReason(details: String)
       extends BankingError("invalid_adjustment_reason", details)
@@ -302,5 +293,5 @@ enum BankingError(val code: String, val message: String) extends DomainError der
   case AdjustedTransactionAccountMismatch(transactionId: UUID, accountId: String)
       extends BankingError(
         "adjusted_transaction_account_mismatch",
-        s"Transaction '$transactionId' does not belong to account '$accountId'"
+        s"Adjusted transaction '$transactionId' does not belong to account '$accountId'"
       )

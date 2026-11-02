@@ -14,11 +14,8 @@ enum LedgerAccount derives CanEqual:
   case Customer(accountId: AccountId)
   case Cash
   case BillerClearing
-<<<<<<< HEAD
   case Adjustments
-=======
   case InterestExpense
->>>>>>> origin/main
 
 final case class AccountLedgerSnapshot(
     balance: BigDecimal,

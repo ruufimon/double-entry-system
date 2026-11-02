@@ -1443,7 +1443,20 @@
       "allDeclaredFields": true,
       "allPublicConstructors": true,
       "allPublicMethods": true,
-      "allPublicFields": true
+      "allPublicFields": true,
+      "queryAllDeclaredMethods": true,
+      "queryAllPublicMethods": true
+    },
+    {
+      "type": "org.flywaydb.database.postgresql.PostgreSQLConfigurationExtension$TransactionalModel",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true,
+      "allPublicConstructors": true,
+      "allPublicMethods": true,
+      "allPublicFields": true,
+      "queryAllDeclaredMethods": true,
+      "queryAllPublicMethods": true
     },
     {
       "type": "org.flywaydb.database.h2.H2DatabaseType",
@@ -1461,7 +1474,9 @@
       "allDeclaredFields": true,
       "allPublicConstructors": true,
       "allPublicMethods": true,
-      "allPublicFields": true
+      "allPublicFields": true,
+      "queryAllDeclaredMethods": true,
+      "queryAllPublicMethods": true
     },
     {
       "type": "org.flywaydb.core.internal.command.clean.CleanModeConfigurationExtension",
@@ -1470,7 +1485,9 @@
       "allDeclaredFields": true,
       "allPublicConstructors": true,
       "allPublicMethods": true,
-      "allPublicFields": true
+      "allPublicFields": true,
+      "queryAllDeclaredMethods": true,
+      "queryAllPublicMethods": true
     },
     {
       "type": "org.flywaydb.core.internal.command.clean.CleanModel",
@@ -1479,7 +1496,9 @@
       "allDeclaredFields": true,
       "allPublicConstructors": true,
       "allPublicMethods": true,
-      "allPublicFields": true
+      "allPublicFields": true,
+      "queryAllDeclaredMethods": true,
+      "queryAllPublicMethods": true
     },
     {
       "type": "org.flywaydb.core.extensibility.ConfigurationExtension",
@@ -1488,7 +1507,15 @@
       "allDeclaredFields": true,
       "allPublicConstructors": true,
       "allPublicMethods": true,
-      "allPublicFields": true
+      "allPublicFields": true,
+      "queryAllDeclaredMethods": true,
+      "queryAllPublicMethods": true
+    },
+    {
+      "type": "org.flywaydb.core.internal.license.FlywayEditionUpgradeRequiredException",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
     },
     {
       "type": "org.postgresql.jdbc.PgConnection"
@@ -1877,6 +1904,9 @@
       "name": "org.flywaydb.database.postgresql.PostgreSQLConfigurationExtension"
     },
     {
+      "name": "org.flywaydb.database.postgresql.PostgreSQLConfigurationExtension$TransactionalModel"
+    },
+    {
       "name": "org.flywaydb.database.h2.H2ConfigurationExtension"
     },
     {
@@ -1884,6 +1914,9 @@
     },
     {
       "name": "org.flywaydb.core.internal.command.clean.CleanModel"
+    },
+    {
+      "name": "org.flywaydb.core.extensibility.ConfigurationExtension"
     }
   ]
 }

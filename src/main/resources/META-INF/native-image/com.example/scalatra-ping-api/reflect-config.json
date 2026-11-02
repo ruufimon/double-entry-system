@@ -97,5 +97,14 @@
     "allPublicConstructors": true,
     "allPublicMethods": true,
     "allPublicFields": true
+  },
+  {
+    "name": "org.flywaydb.core.internal.publishing.PublishingConfigurationExtension",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true,
+    "allPublicConstructors": true,
+    "allPublicMethods": true,
+    "allPublicFields": true
   }
 ]

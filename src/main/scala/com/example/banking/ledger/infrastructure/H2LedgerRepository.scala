@@ -309,7 +309,7 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
       FROM ledger_transactions t
       JOIN ledger_entries e
         ON e.transaction_id = t.transaction_id AND e.customer_account_id = ?
-      ORDER BY t.sequence_no
+      ORDER BY t.occurred_at, t.sequence_no
       """
     )
     try

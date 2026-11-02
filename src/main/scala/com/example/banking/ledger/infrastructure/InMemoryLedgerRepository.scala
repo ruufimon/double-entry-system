@@ -176,7 +176,9 @@ final class InMemoryLedgerRepository extends LedgerRepository:
 
   private def activitiesOf(accountId: AccountId): Vector[AccountActivity] =
     val reversedTransactionIds = journal.flatMap(_.reversesTransactionId).toSet
+    // sortBy is stable, so transactions with the same timestamp keep their posting order.
     journal
+      .sortBy(_.occurredAt)
       .traverse(activityFor(accountId, reversedTransactionIds))
       .runA(BigDecimal(0))
       .value

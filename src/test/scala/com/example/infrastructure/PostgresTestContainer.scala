@@ -1,9 +1,10 @@
 package com.example.infrastructure
 
-import org.scalatest.{BeforeAndAfterAll, Suite}
+import org.flywaydb.core.Flyway
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, Suite}
 import org.testcontainers.containers.PostgreSQLContainer
 
-trait PostgresTestContainer extends BeforeAndAfterAll:
+trait PostgresTestContainer extends BeforeAndAfterAll with BeforeAndAfterEach:
   this: Suite =>
 
   private val postgresContainer: PostgreSQLContainer[?] =
@@ -23,6 +24,24 @@ trait PostgresTestContainer extends BeforeAndAfterAll:
   override def beforeAll(): Unit =
     super.beforeAll()
     postgresContainer.start()
+
+  /** Gives each test an empty, migrated database, since the container is shared across the suite. */
+  override def beforeEach(): Unit =
+    super.beforeEach()
+    cleanPostgresDatabase()
+    createPostgresDatabase().close()
+
+  // Clean is enabled here only; production Schema.migrate keeps Flyway's default of cleanDisabled=true.
+  private def cleanPostgresDatabase(): Unit =
+    Flyway.configure()
+      .dataSource(
+        postgresContainer.getJdbcUrl,
+        postgresContainer.getUsername,
+        postgresContainer.getPassword
+      )
+      .cleanDisabled(false)
+      .load()
+      .clean()
 
   override def afterAll(): Unit =
     try super.afterAll()

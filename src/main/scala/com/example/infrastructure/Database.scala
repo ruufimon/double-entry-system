@@ -20,6 +20,15 @@ final case class DatabaseConfig(
     database: Option[String] = None
 )
 
+final case class ParsedPostgresUrl(
+    host: String,
+    port: Int,
+    database: String,
+    user: String,
+    password: String,
+    query: Option[String]
+)
+
 enum DatabaseSelectionError(val message: String):
   case PostgresRequiredOnRailway(railwayEnv: String)
       extends DatabaseSelectionError(
@@ -31,29 +40,32 @@ enum DatabaseSelectionError(val message: String):
       )
 
 object Database:
+  private val DefaultPostgresPort = 5432
+
   def h2Url(path: String): String =
     s"jdbc:h2:file:$path;DB_CLOSE_DELAY=-1"
 
   def h2MemoryUrl(name: String): String =
     s"jdbc:h2:mem:$name;DB_CLOSE_DELAY=-1"
 
-  def postgresUrl(host: String, port: Int, database: String): String =
-    s"jdbc:postgresql://$host:$port/$database"
+  def postgresUrl(host: String, port: Int, database: String, query: Option[String] = None): String =
+    s"jdbc:postgresql://$host:$port/$database${query.fold("")(parameters => s"?$parameters")}"
 
-  def parsePostgresUrl(url: String): Option[(String, Int, String, String, String)] =
+  def parsePostgresUrl(url: String): Option[ParsedPostgresUrl] =
     if !url.startsWith("postgresql://") && !url.startsWith("postgres://") then None
     else
       try
-        val normalizedUrl = if url.startsWith("postgres://") then 
-          url.replace("postgres://", "postgresql://") 
-        else url
-        val uri = new URI(normalizedUrl)
+        val uri = new URI(url)
         val userInfo = Option(uri.getUserInfo).map(_.split(":", 2))
         val user = userInfo.flatMap(_.headOption)
         val password = userInfo.flatMap(_.lift(1))
-        (user, password, Option(uri.getHost), Option(uri.getPort), Option(uri.getPath)) match
-          case (Some(u), Some(p), Some(h), Some(port), Some(path)) if path.nonEmpty =>
-            Some((h, port, path.stripPrefix("/"), u, p))
+        // The raw query keeps its percent-encoding, which pgjdbc decodes itself.
+        val query = Option(uri.getRawQuery).filter(_.nonEmpty)
+        // URI#getPort reports a missing port as -1.
+        val port = if uri.getPort == -1 then DefaultPostgresPort else uri.getPort
+        (user, password, Option(uri.getHost), Option(uri.getPath)) match
+          case (Some(u), Some(p), Some(h), Some(path)) if path.nonEmpty =>
+            Some(ParsedPostgresUrl(h, port, path.stripPrefix("/"), u, p, query))
           case _ => None
       catch case _: Exception => None
 
@@ -94,14 +106,14 @@ object Database:
     // Try DATABASE_URL as fallback
     val databaseUrlConfig = pgConfig.orElse {
       databaseUrl.flatMap { url =>
-        parsePostgresUrl(url).map { case (host, port, db, user, password) =>
+        parsePostgresUrl(url).map { parsed =>
           DatabaseConfig(
             vendor = DatabaseVendor.PostgreSQL,
-            jdbcUrl = postgresUrl(host, port, db),
-            user = user,
-            password = password,
-            host = Some(host),
-            database = Some(db)
+            jdbcUrl = postgresUrl(parsed.host, parsed.port, parsed.database, parsed.query),
+            user = parsed.user,
+            password = parsed.password,
+            host = Some(parsed.host),
+            database = Some(parsed.database)
           )
         }
       }

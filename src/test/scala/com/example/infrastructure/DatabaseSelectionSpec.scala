@@ -302,3 +302,73 @@ final class DatabaseSelectionSpec extends AnyFunSuite with Matchers:
     val config = result.toOption.get
     config.vendor shouldBe DatabaseVendor.H2 // falls back because credentials missing
   }
+
+  test("DATABASE_URL query parameter is kept in the JDBC URL") {
+    val config = configFromDatabaseUrl("postgresql://user:pass@db.example.com:25060/defaultdb?sslmode=require")
+
+    config.vendor shouldBe DatabaseVendor.PostgreSQL
+    config.jdbcUrl shouldBe "jdbc:postgresql://db.example.com:25060/defaultdb?sslmode=require"
+    config.database shouldBe Some("defaultdb")
+  }
+
+  test("multiple DATABASE_URL query parameters are kept verbatim and in order") {
+    val config = configFromDatabaseUrl(
+      "postgresql://user:pass@host:5432/db?sslmode=require&application_name=my%20app&connectTimeout=10"
+    )
+
+    config.jdbcUrl shouldBe
+      "jdbc:postgresql://host:5432/db?sslmode=require&application_name=my%20app&connectTimeout=10"
+    config.database shouldBe Some("db")
+  }
+
+  test("postgres:// scheme keeps its query parameters unchanged") {
+    val config = configFromDatabaseUrl(
+      "postgres://user:pass@host:5432/db?sslmode=require&application_name=postgres://app"
+    )
+
+    config.jdbcUrl shouldBe
+      "jdbc:postgresql://host:5432/db?sslmode=require&application_name=postgres://app"
+  }
+
+  test("DATABASE_URL without a query produces a JDBC URL without a question mark") {
+    configFromDatabaseUrl("postgresql://user:pass@host:5432/db").jdbcUrl shouldBe
+      "jdbc:postgresql://host:5432/db"
+    configFromDatabaseUrl("postgresql://user:pass@host:5432/db?").jdbcUrl shouldBe
+      "jdbc:postgresql://host:5432/db"
+  }
+
+  test("URL-encoded password is decoded while the query stays in the JDBC URL") {
+    val config = configFromDatabaseUrl("postgresql://user:p%40ss%2Fw%3Ard@host:5432/db?sslmode=require")
+
+    config.user shouldBe "user"
+    config.password shouldBe "p@ss/w:rd"
+    config.jdbcUrl shouldBe "jdbc:postgresql://host:5432/db?sslmode=require"
+  }
+
+  test("DATABASE_URL without a port defaults to 5432") {
+    val config = configFromDatabaseUrl("postgresql://user:pass@db.example.com/mydb")
+
+    config.vendor shouldBe DatabaseVendor.PostgreSQL
+    config.jdbcUrl shouldBe "jdbc:postgresql://db.example.com:5432/mydb"
+    config.host shouldBe Some("db.example.com")
+    config.database shouldBe Some("mydb")
+    configFromDatabaseUrl("postgres://user:pass@host/db?sslmode=require").jdbcUrl shouldBe
+      "jdbc:postgresql://host:5432/db?sslmode=require"
+  }
+
+  private def configFromDatabaseUrl(databaseUrl: String): DatabaseConfig =
+    Database.selectDatabase(
+      pgHost = None,
+      pgPort = None,
+      pgDatabase = None,
+      pgUser = None,
+      pgPassword = None,
+      databaseUrl = Some(databaseUrl),
+      dbUrl = None,
+      dbUser = None,
+      dbPassword = None,
+      railwayEnvironment = None,
+      requirePostgres = false
+    ) match
+      case Right(config) => config
+      case Left(error)   => fail(s"Expected Right, got $error")

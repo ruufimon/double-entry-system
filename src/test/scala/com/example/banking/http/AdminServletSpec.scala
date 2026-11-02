@@ -98,6 +98,30 @@ final class AdminServletSpec extends ScalatraFunSuite:
     }
   }
 
+  test("lastActivityAt is the newest activity even when an older one is posted last") {
+    val id = accountId("backdated-account")
+    requireRight(operations.open(id))
+    val newest = occurredAt.plusSeconds(60)
+    requireRight(operations.deposit(UUID.randomUUID(), id, money("20.00"), newest))
+    requireRight(operations.deposit(UUID.randomUUID(), id, money("10.00"), occurredAt))
+
+    get("/admin/accounts/backdated-account") {
+      status shouldBe 200
+      val account = parse(body).extract[AdminAccountDetailResponse]
+      account.lastActivityAt shouldBe Some(newest.toString)
+      account.activities.map(_.occurredAt) shouldBe Vector(occurredAt.toString, newest.toString)
+      account.balance shouldBe BigDecimal("30.00")
+    }
+
+    get("/admin/accounts") {
+      status shouldBe 200
+      val summary = parse(body)
+        .extract[Vector[AdminAccountSummaryResponse]]
+        .find(_.accountId == "backdated-account")
+      summary.flatMap(_.lastActivityAt) shouldBe Some(newest.toString)
+    }
+  }
+
   test("GET /admin/accounts/:accountId rejects invalid and missing accounts") {
     get("/admin/accounts/not%20valid") {
       status shouldBe 400

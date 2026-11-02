@@ -1401,6 +1401,51 @@
       ]
     },
     {
+      "type": "org.postgresql.Driver",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.postgresql.util.PGobject",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.flywaydb.core.Flyway"
+    },
+    {
+      "type": "org.flywaydb.core.api.configuration.Configuration"
+    },
+    {
+      "type": "org.flywaydb.core.api.configuration.FluentConfiguration"
+    },
+    {
+      "type": "org.flywaydb.database.postgresql.PostgreSQLDatabaseType",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.flywaydb.database.h2.H2DatabaseType",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
       "type": "org.json4s.Extraction$",
       "fields": [
         {

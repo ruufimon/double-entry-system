@@ -64,17 +64,35 @@ object Server:
       server.join()
     finally server.close()
 
-  /** Reads H2 connection configuration from the process environment. */
+  /** Reads database configuration from the process environment.
+    * Prefers PostgreSQL when PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD are set.
+    * Falls back to DATABASE_URL in postgresql:// format.
+    * Otherwise uses H2 in-memory (or file-based if DB_URL is set).
+    */
   def databaseFromEnv(): (String, String, String) =
-    (
-      // Without DB_URL each server start gets an isolated in-memory DB. Set DB_URL
-      // (a file path) to persist data across restarts.
-      sys.env
-        .get("DB_URL")
-        .getOrElse(Database.memoryUrl(s"banking-${UUID.randomUUID()}")),
-      sys.env.get("DB_USER").getOrElse(DatabaseConfig.DefaultUser),
-      sys.env.get("DB_PASSWORD").getOrElse(DatabaseConfig.DefaultPassword)
-    )
+    val pgConfig = for
+      host <- sys.env.get("PGHOST")
+      port <- sys.env.get("PGPORT").flatMap(_.toIntOption)
+      database <- sys.env.get("PGDATABASE")
+      user <- sys.env.get("PGUSER")
+      password <- sys.env.get("PGPASSWORD")
+    yield (Database.postgresUrl(host, port, database), user, password)
+
+    pgConfig.orElse {
+      sys.env.get("DATABASE_URL").flatMap { url =>
+        Database.parsePostgresUrl(url).map { case (host, port, db, user, password) =>
+          (Database.postgresUrl(host, port, db), user, password)
+        }
+      }
+    }.getOrElse {
+      (
+        sys.env
+          .get("DB_URL")
+          .getOrElse(Database.h2MemoryUrl(s"banking-${UUID.randomUUID()}")),
+        sys.env.get("DB_USER").getOrElse(DatabaseConfig.DefaultUser),
+        sys.env.get("DB_PASSWORD").getOrElse(DatabaseConfig.DefaultPassword)
+      )
+    }
 
   private[example] def create(port: Int): BankingApiServer =
     create(port, sys.env.get("BILLER_URL").filter(_.nonEmpty))

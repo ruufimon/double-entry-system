@@ -201,7 +201,7 @@ final class LedgerAdjustmentSpec extends AnyFunSuite with Matchers:
     new LedgerBackedAccountOperations(new InMemoryLedgerRepository(), new InMemoryAccountRepository())
 
   private def h2Operations(): LedgerBackedAccountOperations =
-    val database = Database.open(Database.memoryUrl(s"ledger-adjustment-${UUID.randomUUID()}"))
+    val database = Database.open(Database.h2MemoryUrl(s"ledger-adjustment-${UUID.randomUUID()}"))
     new LedgerBackedAccountOperations(
       new H2LedgerRepository(database),
       new H2AccountRepository(database)

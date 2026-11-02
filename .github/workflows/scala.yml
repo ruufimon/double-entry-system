@@ -16,8 +16,27 @@ permissions:
 
 jobs:
   build:
-    name: Backend Tests
+    name: Backend Tests (${{ matrix.database }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [h2, postgres]
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: banking_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
     - uses: actions/checkout@v5
@@ -29,7 +48,11 @@ jobs:
         cache: 'sbt'
     - name: Set up sbt
       uses: sbt/setup-sbt@v1
-    - name: Run tests
+    - name: Run H2 tests
+      if: matrix.database == 'h2'
+      run: sbt test
+    - name: Run PostgreSQL tests
+      if: matrix.database == 'postgres'
       run: sbt test
       # Optional: This step uploads information to the GitHub dependency graph and unblocking Dependabot alerts for the repository
 

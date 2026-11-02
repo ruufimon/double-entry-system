@@ -72,6 +72,34 @@ sbt run
 The API listens on `http://localhost:8080`. Set the `PORT` environment variable
 to use a different backend port.
 
+### Database Configuration
+
+By default, the API uses an in-memory H2 database that resets on restart. To use PostgreSQL or persist H2 data across restarts, set these environment variables:
+
+**PostgreSQL (Railway reference variables):**
+```bash
+PGHOST=localhost
+PGPORT=5432
+PGDATABASE=banking
+PGUSER=postgres
+PGPASSWORD=your_password
+sbt run
+```
+
+**PostgreSQL (DATABASE_URL format):**
+```bash
+DATABASE_URL=postgresql://user:password@localhost:5432/banking
+sbt run
+```
+
+**H2 file-based (persists across restarts):**
+```bash
+DB_URL=/path/to/banking
+sbt run
+```
+
+When PostgreSQL environment variables are set, the app uses PostgreSQL. Otherwise, it falls back to H2 (in-memory by default, or file-based if `DB_URL` is set).
+
 By default the API settles bills with a single in-process demo bill. To pay
 bills through the [fake biller](#fake-biller) over HTTP instead, start it in
 another terminal and point the API at it:
@@ -418,21 +446,28 @@ emulates that stage, which makes it slower. The final nginx image is native.
 
 ### Railway
 
-Create three services from this repository and set these variables:
+Create a PostgreSQL database and three services from this repository:
 
 | Service | Variable | Value |
 | --- | --- | --- |
 | API | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.native` |
 | API | `PORT` | `8080` |
+| API | `PGHOST` | `${{Postgres.PGHOST}}` (reference variable) |
+| API | `PGPORT` | `${{Postgres.PGPORT}}` |
+| API | `PGDATABASE` | `${{Postgres.PGDATABASE}}` |
+| API | `PGUSER` | `${{Postgres.PGUSER}}` |
+| API | `PGPASSWORD` | `${{Postgres.PGPASSWORD}}` |
 | UI | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.ui` |
 | UI | `API_URL` | `http://${{API.RAILWAY_PRIVATE_DOMAIN}}:8080` |
 | Admin UI | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.admin-ui` |
 | Admin UI | `API_URL` | `http://${{API.RAILWAY_PRIVATE_DOMAIN}}:8080` |
 
-Replace `API` in the reference variable with the API service's name in Railway.
+Replace `API` and `Postgres` in the reference variables with the service names in Railway.
 Generate public domains for the UI services only; the API stays on Railway's
 private network. If either UI cannot reach the API privately, generate a public
 domain for the API too and set `API_URL` to that `https://` URL instead.
+
+The API detects PostgreSQL when the `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/`PGPASSWORD` variables are set (Railway's reference variables) or when `DATABASE_URL` is provided in `postgresql://` format. Flyway applies schema migrations automatically on startup.
 
 ### Native API image (GraalVM)
 

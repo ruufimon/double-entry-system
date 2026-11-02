@@ -1,6 +1,7 @@
 # Double-Entry Banking System
 
-A small full-stack banking application built with Scala, Scalatra, and Angular.
+A small full-stack banking application built with Scala, Scalatra, and Angular,
+with an Elm port of the customer UI.
 It demonstrates account deposits, withdrawals, atomic transfers, and event-driven bill payments
 backed by an immutable double-entry ledger.
 
@@ -20,7 +21,9 @@ when the backend restarts.
 - Internal message bus for account charging, settlement, reversal, and auditing
 - Cats-powered validation, non-empty ledger entries, and immutable balance transitions
 - Angular account dashboard and operation flows
-- Standalone read-only Angular admin console for account operations
+- Elm port of the customer UI, checked against the same Playwright specs
+- Standalone Angular admin console for account operations
+- Audited admin balance adjustments for correcting mistakes
 - Scala unit and HTTP tests, Angular unit tests, and Playwright E2E coverage
 
 ## Architecture
@@ -37,6 +40,8 @@ the ledger transaction, and the payment process then settles with the biller.
 Failed settlement creates an inverse ledger transaction.
 
 See [spec/LedgerFlow.md](spec/LedgerFlow.md) for the detailed flow diagram.
+Admin corrections are designed in
+[spec/BalanceAdjustment.md](spec/BalanceAdjustment.md).
 
 ## Technology
 
@@ -45,6 +50,7 @@ See [spec/LedgerFlow.md](spec/LedgerFlow.md) for the detailed flow diagram.
 - Scalatra 3.2.1 and Jetty 12
 - sbt 2.0.9
 - Angular 22
+- Elm 0.19.1, built with Vite
 - Vitest and ScalaTest
 - Playwright with Chromium
 
@@ -97,6 +103,13 @@ bun run start --host localhost --port 4300
 Open `http://localhost:4300`. This educational admin console is read-only and
 has no authentication; do not expose it to untrusted networks.
 
+The [Elm](ui-elm/README.md) customer UI is an alternative to `ui/` with the same
+pages and behavior. It proxies `/api` to the backend on port 8080:
+
+```bash
+cd ui-elm && bun install && bun run start     # http://localhost:4500
+```
+
 ## API
 
 | Method | Endpoint | Description |
@@ -114,9 +127,27 @@ has no authentication; do not expose it to untrusted networks.
 | `GET` | `/accounts/:accountId/bill-payments/:paymentId` | Read payment status |
 | `GET` | `/admin/accounts` | List operational summaries for every account |
 | `GET` | `/admin/accounts/:accountId` | Read complete operational account activity |
+| `POST` | `/admin/accounts/:accountId/adjustments` | Correct a balance (admin token required) |
+| `GET` | `/admin/accounts/:accountId/adjustments` | List adjustments with reason and actor (admin token required) |
 
 Account IDs may contain 1–64 letters, numbers, underscores, or hyphens. Monetary
 amounts must be positive and have no more than two decimal places.
+
+Balance adjustments are disabled unless the API starts with `ADMIN_TOKEN` set.
+Requests then need `Authorization: Bearer <token>`, an `X-Admin-Actor` header,
+and a UUID `Idempotency-Key`. See
+[spec/BalanceAdjustment.md](spec/BalanceAdjustment.md) for the full contract.
+
+```bash
+ADMIN_TOKEN=local-admin sbt run
+
+curl -X POST http://localhost:8080/admin/accounts/account-123/adjustments \
+  -H 'Authorization: Bearer local-admin' \
+  -H 'X-Admin-Actor: ops-alice' \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H 'Content-Type: application/json' \
+  -d '{"direction":"credit","amount":50.00,"reason":"Deposit keyed as 100 instead of 150"}'
+```
 
 ### Account example
 
@@ -262,6 +293,14 @@ Run the backend test suite:
 sbt test
 ```
 
+Acceptance specs in `src/test/scala/com/example/acceptance/` start the real
+API and check a feature end to end. Each one links to its design in `spec/`.
+Run only those:
+
+```bash
+sbt "testOnly com.example.acceptance.*"
+```
+
 Run Angular unit tests and a production build:
 
 ```bash
@@ -279,8 +318,17 @@ bun run build
 bun run e2e
 ```
 
+The Elm customer UI has the same `test` and `build` scripts. Its tests run on
+elm-test:
+
+```bash
+cd ui-elm
+bun run test
+bun run build
+```
+
 Use `bun run test`, not `bun test`: the latter runs Bun's own test runner
-instead of the Angular (Vitest) tests.
+instead of each project's configured tests.
 
 Install Playwright's Chromium binary once, then run the full-stack E2E test:
 
@@ -291,7 +339,14 @@ bun run e2e
 ```
 
 Playwright starts the backend and frontend automatically when they are not
-already running.
+already running. The same specs cover the Elm customer UI. Set
+`E2E_APP=ui-elm` to start its dev server instead of Angular. Install its
+dependencies first:
+
+```bash
+cd ui
+E2E_APP=ui-elm bun run e2e
+```
 
 To verify a deployed Railway environment, open **Actions → Staging E2E → Run
 workflow** and enter the public customer and admin UI URLs. The workflow sends
@@ -328,9 +383,10 @@ every deploy or restart to reset accounts and ledger entries.
 
 ### Docker
 
-Run the API, the [fake biller](#fake-biller), and both UIs with Docker Compose.
-Open the customer application at `http://localhost:4200` and the admin console at
-`http://localhost:4300`. The fake biller's admin API is on `http://localhost:8090`:
+Run the API, the [fake biller](#fake-biller), and all UIs with Docker Compose.
+Open the customer application at `http://localhost:4200` (Angular) or
+`http://localhost:4500` (Elm), and the admin console at `http://localhost:4300`.
+The fake biller's admin API is on `http://localhost:8090`:
 
 ```bash
 docker compose up --build
@@ -355,6 +411,10 @@ Build and run the admin image independently in the same way:
 docker build -f Dockerfile.admin-ui -t banking-admin-ui .
 docker run --rm -p 4300:8080 -e API_URL=http://host.docker.internal:8080 banking-admin-ui
 ```
+
+[`Dockerfile.ui-elm`](Dockerfile.ui-elm) packages the Elm UI the same way. Elm
+0.19.1 has no Linux ARM compiler, so the Elm build stage runs as `linux/amd64`. On Apple Silicon Docker
+emulates that stage, which makes it slower. The final nginx image is native.
 
 ### Railway
 
@@ -414,9 +474,11 @@ src/main/scala/com/example/banking/      Account, ledger, messaging, and HTTP co
 src/main/scala/com/example/billpayment/  Bill-payment workflow and biller adapters
 src/main/scala/com/example/biller/       Fake biller HTTP service for demos
 src/test/scala/                          Backend tests
+src/test/scala/com/example/acceptance/   Feature acceptance specs (ATDD)
 ui/                                     Angular application and Playwright tests
 admin-ui/                               Standalone Angular admin application
-spec/                                   Architecture documentation
+ui-elm/                                 Elm port of the customer UI
+spec/                                   Architecture and feature design docs
 ```
 
 ## License

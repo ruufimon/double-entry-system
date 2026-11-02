@@ -55,6 +55,18 @@ final class NativeImageMetadataSpec extends AnyFunSuite with Matchers:
         "activityCount",
         "lastActivityAt"
       ),
+      "com.example.banking.http.AdminAdjustmentResponse" -> Set(
+        "adjustmentId",
+        "accountId",
+        "direction",
+        "amount",
+        "currency",
+        "reason",
+        "actor",
+        "adjustsTransactionId",
+        "balanceAfter",
+        "occurredAt"
+      ),
       "com.example.banking.http.AdminAccountDetailResponse" -> Set(
         "accountId",
         "currency",

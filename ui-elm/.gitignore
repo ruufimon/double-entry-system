@@ -1,0 +1,7 @@
+/node_modules
+/dist
+/.cache
+/playwright-report
+/test-results
+npm-debug.log*
+/elm-stuff

@@ -14,6 +14,7 @@ enum LedgerAccount derives CanEqual:
   case Customer(accountId: AccountId)
   case Cash
   case BillerClearing
+  case Adjustments
 
 final case class AccountLedgerSnapshot(
     balance: BigDecimal,
@@ -38,7 +39,8 @@ final case class LedgerTransaction private (
     operation: BankingOperation,
     entries: NonEmptyVector[LedgerEntry],
     occurredAt: Instant,
-    reversesTransactionId: Option[UUID]
+    reversesTransactionId: Option[UUID],
+    adjustsTransactionId: Option[UUID]
 ) derives CanEqual
 
 object LedgerTransaction:
@@ -47,7 +49,8 @@ object LedgerTransaction:
       operation: BankingOperation,
       entries: NonEmptyVector[LedgerEntry],
       occurredAt: Instant,
-      reversesTransactionId: Option[UUID] = None
+      reversesTransactionId: Option[UUID] = None,
+      adjustsTransactionId: Option[UUID] = None
   ): Either[LedgerError, LedgerTransaction] =
     val entryVector = entries.toVector
     val currencies = entryVector.map(_.currency).distinct
@@ -90,6 +93,11 @@ object LedgerTransaction:
       Left(LedgerError.InvalidTransaction("A reversal must reference its original transaction"))
     else if operation != BankingOperation.BillPaymentReversal && reversesTransactionId.nonEmpty then
       Left(LedgerError.InvalidTransaction("Only a reversal may reference an original transaction"))
+    else if operation == BankingOperation.Adjustment &&
+        !entryVector.exists(_.account == LedgerAccount.Adjustments) then
+      Left(LedgerError.InvalidTransaction("An adjustment must post against the adjustments account"))
+    else if operation != BankingOperation.Adjustment && adjustsTransactionId.nonEmpty then
+      Left(LedgerError.InvalidTransaction("Only an adjustment may reference an adjusted transaction"))
     else
       Right(
         LedgerTransaction(
@@ -97,7 +105,8 @@ object LedgerTransaction:
           operation,
           entries,
           occurredAt,
-          reversesTransactionId
+          reversesTransactionId,
+          adjustsTransactionId
         )
       )
 
@@ -120,9 +129,17 @@ object LedgerTransaction:
       operation: BankingOperation,
       entries: NonEmptyVector[LedgerEntry],
       occurredAt: Instant,
-      reversesTransactionId: Option[UUID]
+      reversesTransactionId: Option[UUID],
+      adjustsTransactionId: Option[UUID] = None
   ): LedgerTransaction =
-    LedgerTransaction(transactionId, operation, entries, occurredAt, reversesTransactionId)
+    LedgerTransaction(
+      transactionId,
+      operation,
+      entries,
+      occurredAt,
+      reversesTransactionId,
+      adjustsTransactionId
+    )
 
 enum LedgerError(val code: String, val message: String)
     extends DomainError

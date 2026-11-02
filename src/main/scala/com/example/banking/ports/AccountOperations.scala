@@ -9,6 +9,10 @@ import com.example.banking.domain.{
   AccountId,
   AccountOpening,
   AccountOverview,
+  AdjustmentDirection,
+  AdjustmentId,
+  AdjustmentMemo,
+  BalanceAdjustment,
   Money,
   TransferAccounts
 }
@@ -59,3 +63,15 @@ trait AccountOperations:
   ): Either[DomainError, Account]
 
   def activities(accountId: AccountId): Either[DomainError, Vector[AccountActivity]]
+
+  def adjust(
+      adjustmentId: AdjustmentId,
+      accountId: AccountId,
+      direction: AdjustmentDirection,
+      amount: Money,
+      memo: AdjustmentMemo,
+      adjustsTransactionId: Option[UUID],
+      occurredAt: Instant
+  ): Either[DomainError, BalanceAdjustment]
+
+  def adjustments(accountId: AccountId): Either[DomainError, Vector[BalanceAdjustment]]

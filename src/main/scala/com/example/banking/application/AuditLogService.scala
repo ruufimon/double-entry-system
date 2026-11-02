@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import com.example.banking.domain.{
   AuditLogEntry,
+  BalanceAdjusted,
   BankingOperation,
   DepositCompleted,
   TransferCompleted,
@@ -53,6 +54,17 @@ final class AuditLogService(
               amount = event.amount,
               resultingBalance = event.resultingBalance,
               occurredAt = event.occurredAt
+            )
+          )
+        case BalanceAdjusted(adjustment) =>
+          auditLogRepository.append(
+            AuditLogEntry(
+              transactionId = adjustment.adjustmentId.value,
+              operation = BankingOperation.Adjustment,
+              accountId = adjustment.accountId,
+              amount = adjustment.amount,
+              resultingBalance = adjustment.balanceAfter,
+              occurredAt = adjustment.occurredAt
             )
           )
         case _ => ()

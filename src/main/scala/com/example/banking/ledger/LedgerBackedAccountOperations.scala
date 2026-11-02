@@ -118,6 +118,65 @@ final class LedgerBackedAccountOperations(
   ): Either[DomainError, Vector[AccountActivity]] =
     accountRepository.find(accountId).map(_ => ledgerRepository.activities(accountId))
 
+  override def adjust(
+      adjustmentId: AdjustmentId,
+      accountId: AccountId,
+      direction: AdjustmentDirection,
+      amount: Money,
+      memo: AdjustmentMemo,
+      adjustsTransactionId: Option[UUID],
+      occurredAt: Instant
+  ): Either[DomainError, BalanceAdjustment] =
+    val (customerDirection, counterDirection) = direction match
+      case AdjustmentDirection.Credit => (LedgerDirection.Credit, LedgerDirection.Debit)
+      case AdjustmentDirection.Debit  => (LedgerDirection.Debit, LedgerDirection.Credit)
+
+    for
+      _ <- accountRepository.find(accountId)
+      transaction <- LedgerTransaction.create(
+        adjustmentId.value,
+        BankingOperation.Adjustment,
+        NonEmptyVector.of(
+          LedgerEntry(LedgerAccount.Customer(accountId), customerDirection, amount, Currency.THB),
+          LedgerEntry(LedgerAccount.Adjustments, counterDirection, amount, Currency.THB)
+        ),
+        occurredAt,
+        adjustsTransactionId = adjustsTransactionId
+      )
+      account <- ledgerRepository.adjust(transaction, memo)
+    yield BalanceAdjustment(
+      adjustmentId,
+      accountId,
+      direction,
+      amount,
+      memo,
+      adjustsTransactionId,
+      account.balance,
+      occurredAt
+    )
+
+  override def adjustments(
+      accountId: AccountId
+  ): Either[DomainError, Vector[BalanceAdjustment]] =
+    accountRepository.find(accountId).map { _ =>
+      val memos = ledgerRepository.adjustmentMemos(accountId)
+      ledgerRepository.activities(accountId).collect {
+        case activity if activity.operation == BankingOperation.Adjustment =>
+          BalanceAdjustment(
+            adjustmentId = AdjustmentId(activity.transactionId),
+            accountId = accountId,
+            direction = activity.effect match
+              case BalanceEffect.Increase => AdjustmentDirection.Credit
+              case BalanceEffect.Decrease => AdjustmentDirection.Debit,
+            amount = Money.of(activity.amount),
+            memo = memos(activity.transactionId),
+            adjustsTransactionId = activity.originalTransactionId,
+            balanceAfter = activity.balanceAfter,
+            occurredAt = activity.occurredAt
+          )
+      }
+    }
+
   private def post(
       transactionId: UUID,
       operation: BankingOperation,

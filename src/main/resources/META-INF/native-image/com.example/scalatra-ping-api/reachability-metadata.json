@@ -308,6 +308,71 @@
       ]
     },
     {
+      "type": "com.example.banking.http.AdminAdjustmentRequest",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "scala.Option",
+            "scala.Option",
+            "scala.Option",
+            "scala.Option"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AdminAdjustmentRequest$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AdminAdjustmentResponse",
+      "fields": [
+        {
+          "name": "accountId"
+        },
+        {
+          "name": "actor"
+        },
+        {
+          "name": "adjustmentId"
+        },
+        {
+          "name": "adjustsTransactionId"
+        },
+        {
+          "name": "amount"
+        },
+        {
+          "name": "balanceAfter"
+        },
+        {
+          "name": "currency"
+        },
+        {
+          "name": "direction"
+        },
+        {
+          "name": "occurredAt"
+        },
+        {
+          "name": "reason"
+        }
+      ]
+    },
+    {
+      "type": "com.example.banking.http.AdminAdjustmentResponse$",
+      "fields": [
+        {
+          "name": "MODULE$"
+        }
+      ]
+    },
+    {
       "type": "com.example.banking.http.AdminServlet",
       "fields": [
         {

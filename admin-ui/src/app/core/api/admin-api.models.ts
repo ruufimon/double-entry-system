@@ -5,7 +5,8 @@ export type BankingOperation =
   | 'transfer_out'
   | 'transfer_in'
   | 'bill_payment'
-  | 'bill_payment_reversal';
+  | 'bill_payment_reversal'
+  | 'adjustment';
 
 export interface AdminAccountSummary {
   accountId: string;

@@ -9,6 +9,22 @@ const remoteBaseUrl = stagingUrl
   : undefined;
 const localBaseUrl = `http://localhost:${uiPort}`;
 
+// The same specs also cover the Elm port of this app: E2E_APP=ui-elm.
+const e2eApp = process.env['E2E_APP'] ?? 'ui';
+const uiServer =
+  e2eApp === 'ui'
+    ? {
+        name: 'Angular UI',
+        command:
+          `./node_modules/.bin/ng serve --proxy-config proxy.conf.json --host localhost --port ${uiPort}`,
+        cwd: '.',
+      }
+    : {
+        name: `${e2eApp} UI`,
+        command: `./node_modules/.bin/vite --host localhost --port ${uiPort} --strictPort`,
+        cwd: `../${e2eApp}`,
+      };
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -35,9 +51,7 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      name: 'Angular UI',
-      command:
-        `./node_modules/.bin/ng serve --proxy-config proxy.conf.json --host localhost --port ${uiPort}`,
+      ...uiServer,
       url: localBaseUrl,
       reuseExistingServer: !process.env['CI'],
       timeout: 120_000,

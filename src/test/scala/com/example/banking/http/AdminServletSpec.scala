@@ -1,10 +1,11 @@
 package com.example.banking.http
 
-import java.time.Instant
+import java.time.{Clock, Instant, ZoneOffset}
 import java.util.UUID
 
+import com.example.banking.application.AdjustmentService
 import com.example.banking.domain.{AccountId, Money}
-import com.example.banking.infrastructure.InMemoryAccountRepository
+import com.example.banking.infrastructure.{InMemoryAccountRepository, LocalMessageBus}
 import com.example.banking.ledger.LedgerBackedAccountOperations
 import com.example.banking.ledger.infrastructure.InMemoryLedgerRepository
 import org.json4s.*
@@ -18,8 +19,14 @@ final class AdminServletSpec extends ScalatraFunSuite:
     new InMemoryAccountRepository()
   )
   private val occurredAt = Instant.parse("2026-10-07T04:00:00Z")
+  private val adminToken = "servlet-admin-token"
+  private val adjustmentService = new AdjustmentService(
+    operations,
+    new LocalMessageBus(),
+    Clock.fixed(occurredAt, ZoneOffset.UTC)
+  )
 
-  addServlet(new AdminServlet(operations), "/admin/*")
+  addServlet(new AdminServlet(operations, adjustmentService, Some(adminToken)), "/admin/*")
 
   test("GET /admin/accounts returns an empty list") {
     get("/admin/accounts") {
@@ -102,6 +109,101 @@ final class AdminServletSpec extends ScalatraFunSuite:
       (parse(body) \ "error").extract[String] shouldBe "account_not_found"
     }
   }
+
+  test("POST /admin/accounts/:accountId/adjustments returns the created adjustment") {
+    val id = accountId("servlet-adjusted")
+    requireRight(operations.open(id))
+    val depositId = UUID.randomUUID()
+    requireRight(operations.deposit(depositId, id, money("10.00"), occurredAt))
+    val key = UUID.randomUUID().toString
+
+    post(
+      "/admin/accounts/servlet-adjusted/adjustments",
+      s"""{"direction":"debit","amount":2.50,"reason":"Fee refund reversed","adjustsTransactionId":"$depositId"}""",
+      adminHeaders(idempotencyKey = key)
+    ) {
+      status shouldBe 201
+      parse(body).extract[AdminAdjustmentResponse] shouldBe AdminAdjustmentResponse(
+        adjustmentId = key,
+        accountId = "servlet-adjusted",
+        direction = "debit",
+        amount = BigDecimal("2.50"),
+        currency = "THB",
+        reason = "Fee refund reversed",
+        actor = "ops-alice",
+        adjustsTransactionId = Some(depositId.toString),
+        balanceAfter = BigDecimal("7.50"),
+        occurredAt = occurredAt.toString
+      )
+    }
+
+    get("/admin/accounts/servlet-adjusted/adjustments", headers = adminHeaders()) {
+      status shouldBe 200
+      parse(body).extract[Vector[AdminAdjustmentResponse]].map(_.adjustmentId) shouldBe
+        Vector(key)
+    }
+
+    get("/admin/accounts/servlet-adjusted") {
+      status shouldBe 200
+      parse(body).extract[AdminAccountDetailResponse].activities.last.operation shouldBe
+        "adjustment"
+    }
+  }
+
+  test("adjustment routes require the configured bearer token") {
+    open("servlet-guarded")
+    val requestBody = """{"direction":"credit","amount":1.00,"reason":"Fix"}"""
+
+    Vector(
+      Map.empty[String, String],
+      Map("Authorization" -> adminToken),
+      Map("Authorization" -> s"Bearer ${adminToken}x"),
+      Map("Authorization" -> "Bearer ")
+    ).foreach { authorization =>
+      post(
+        "/admin/accounts/servlet-guarded/adjustments",
+        requestBody,
+        adminHeaders() - "Authorization" ++ authorization
+      ) {
+        status shouldBe 401
+        (parse(body) \ "error").extract[String] shouldBe "unauthorized"
+      }
+    }
+    get("/admin/accounts/servlet-guarded/adjustments") {
+      status shouldBe 401
+    }
+    requireRight(operations.find(accountId("servlet-guarded"))).balance shouldBe BigDecimal(0)
+  }
+
+  test("adjustment errors map to HTTP status codes") {
+    open("servlet-errors")
+    def statusFor(path: String, body: String, headers: Map[String, String] = adminHeaders()) =
+      post(path, body, headers)(status)
+
+    statusFor("/admin/accounts/servlet-errors/adjustments", "{]") shouldBe 400
+    statusFor(
+      "/admin/accounts/servlet-errors/adjustments",
+      """{"direction":"debit","amount":1.00,"reason":"Fix"}"""
+    ) shouldBe 409
+    statusFor(
+      "/admin/accounts/servlet-missing/adjustments",
+      """{"direction":"credit","amount":1.00,"reason":"Fix"}"""
+    ) shouldBe 404
+    statusFor(
+      "/admin/accounts/servlet-errors/adjustments",
+      s"""{"direction":"credit","amount":1.00,"reason":"Fix","adjustsTransactionId":"${UUID.randomUUID()}"}"""
+    ) shouldBe 404
+  }
+
+  private def adminHeaders(
+      idempotencyKey: String = UUID.randomUUID().toString
+  ): Map[String, String] =
+    Map(
+      "Authorization" -> s"Bearer $adminToken",
+      "X-Admin-Actor" -> "ops-alice",
+      "Idempotency-Key" -> idempotencyKey,
+      "Content-Type" -> "application/json"
+    )
 
   private def open(rawAccountId: String): Unit =
     requireRight(operations.open(accountId(rawAccountId)))

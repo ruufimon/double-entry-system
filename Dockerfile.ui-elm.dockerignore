@@ -1,0 +1,7 @@
+# Used instead of .dockerignore when building Dockerfile.ui-elm.
+# Send only the Elm UI sources to the build.
+*
+!ui-elm/
+ui-elm/node_modules
+ui-elm/dist
+ui-elm/elm-stuff

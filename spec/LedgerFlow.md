@@ -42,3 +42,14 @@ flowchart TD
 ```
 
 Bill payment requests account changes through the internal bus. The banking handler alone owns ledger posting, while the payment process manager coordinates biller settlement and compensation.
+
+## Corrections
+
+Two kinds of transaction correct the ledger, and neither edits history:
+
+- **Bill-payment reversal**: the system appends the inverse of a charge when
+  biller settlement fails (above).
+- **Admin balance adjustment**: an admin appends a transaction for the
+  difference between the customer account and the internal `Adjustments`
+  account, optionally linked to the transaction it corrects. See
+  [BalanceAdjustment.md](BalanceAdjustment.md).

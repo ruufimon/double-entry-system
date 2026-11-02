@@ -1,4 +1,4 @@
-# Runs the API, fake biller, customer UI, and admin UI together.
+# Runs the API, fake biller, customer UIs (Angular, Elm), and admin UI together.
 services:
   api:
     build:
@@ -33,6 +33,19 @@ services:
     depends_on:
       # The distroless native image has no shell or curl for a health check,
       # and it starts in milliseconds.
+      api:
+        condition: service_started
+
+  ui-elm:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui-elm
+    image: banking-ui-elm:local
+    environment:
+      API_URL: http://api:8080
+    ports:
+      - "4500:8080"
+    depends_on:
       api:
         condition: service_started
 

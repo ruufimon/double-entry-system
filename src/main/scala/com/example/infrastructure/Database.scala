@@ -69,6 +69,10 @@ object Schema:
       )
       """
     )
+    // Added after the first release; ALTER keeps existing file databases working.
+    connection.createStatement().execute(
+      "ALTER TABLE ledger_transactions ADD COLUMN IF NOT EXISTS adjusts_transaction_id VARCHAR(36)"
+    )
     connection.createStatement().execute(
       """
       CREATE TABLE IF NOT EXISTS ledger_entries (
@@ -81,6 +85,17 @@ object Schema:
         currency VARCHAR(8) NOT NULL,
         PRIMARY KEY (transaction_id, entry_index),
         FOREIGN KEY (transaction_id) REFERENCES ledger_transactions (transaction_id) ON DELETE CASCADE
+      )
+      """
+    )
+    connection.createStatement().execute(
+      """
+      CREATE TABLE IF NOT EXISTS balance_adjustments (
+        transaction_id VARCHAR(36) NOT NULL,
+        reason VARCHAR(500) NOT NULL,
+        actor VARCHAR(128) NOT NULL,
+        PRIMARY KEY (transaction_id),
+        FOREIGN KEY (transaction_id) REFERENCES ledger_transactions (transaction_id)
       )
       """
     )

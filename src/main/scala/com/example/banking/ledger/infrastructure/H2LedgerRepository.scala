@@ -26,8 +26,75 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
   override def post(transaction: LedgerTransaction): Either[DomainError, Account] =
     if transaction.operation == BankingOperation.Transfer then
       Left(LedgerError.InvalidTransaction("Transfers must use atomic transfer posting"))
+    else if transaction.operation == BankingOperation.Adjustment then
+      Left(LedgerError.InvalidTransaction("Adjustments must be posted with a memo"))
     else
       database.withTransaction(connection => runAppend(connection, transaction))
+
+  override def adjust(
+      transaction: LedgerTransaction,
+      memo: AdjustmentMemo
+  ): Either[DomainError, Account] =
+    database.withTransaction { connection =>
+      lockCustomerEntryAccounts(connection, transaction)
+      for
+        _ <- transaction.adjustsTransactionId.fold(Right(())) { adjustedId =>
+          checkAdjustable(connection, adjustedId, transaction)
+        }
+        account <- runAppend(connection, transaction)
+      yield
+        insertMemo(connection, transaction.transactionId, memo)
+        account
+    }
+
+  override def adjustmentMemos(accountId: AccountId): Map[UUID, AdjustmentMemo] =
+    database.withConnection { connection =>
+      val statement = connection.prepareStatement(
+        """
+        SELECT a.transaction_id, a.reason, a.actor
+        FROM balance_adjustments a
+        JOIN ledger_entries e
+          ON e.transaction_id = a.transaction_id AND e.customer_account_id = ?
+        """
+      )
+      try
+        statement.setString(1, accountId.value)
+        val rows = statement.executeQuery()
+        val builder = Map.newBuilder[UUID, AdjustmentMemo]
+        while rows.next() do
+          builder += UUID.fromString(rows.getString(1)) -> AdjustmentMemo(
+            AdjustmentReason.unsafe(rows.getString(2)),
+            AdminActor.unsafe(rows.getString(3))
+          )
+        builder.result()
+      finally statement.close()
+    }
+
+  private def checkAdjustable(
+      connection: Connection,
+      adjustedId: UUID,
+      adjustment: LedgerTransaction
+  ): Either[DomainError, Unit] =
+    val accountId = adjustment.entries.collectFirst {
+      case LedgerEntry(LedgerAccount.Customer(accountId), _, _, _) => accountId
+    }.get
+    findTransaction(connection, adjustedId) match
+      case None => Left(BankingError.AdjustedTransactionNotFound(adjustedId))
+      case Some(original)
+          if !original.entries.exists(_.account == LedgerAccount.Customer(accountId)) =>
+        Left(BankingError.AdjustedTransactionAccountMismatch(adjustedId, accountId.value))
+      case Some(_) => Right(())
+
+  private def insertMemo(connection: Connection, transactionId: UUID, memo: AdjustmentMemo): Unit =
+    val statement = connection.prepareStatement(
+      "INSERT INTO balance_adjustments (transaction_id, reason, actor) VALUES (?, ?, ?)"
+    )
+    try
+      statement.setString(1, transactionId.toString)
+      statement.setString(2, memo.reason.value)
+      statement.setString(3, memo.actor.value)
+      statement.executeUpdate()
+    finally statement.close()
 
   override def transfer(
       transaction: LedgerTransaction,
@@ -194,7 +261,8 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
     val statement = connection.prepareStatement(
       """
       SELECT
-        t.transaction_id, t.occurred_at, t.operation, t.reverses_transaction_id,
+        t.transaction_id, t.occurred_at, t.operation,
+        COALESCE(t.reverses_transaction_id, t.adjusts_transaction_id),
         e.direction, e.amount, e.currency,
         CASE WHEN EXISTS (SELECT 1 FROM ledger_transactions r
               WHERE r.reverses_transaction_id = t.transaction_id)
@@ -242,7 +310,7 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
       transactionId: UUID
   ): Option[LedgerTransaction] =
     val statement = connection.prepareStatement(
-      "SELECT operation, occurred_at, reverses_transaction_id FROM ledger_transactions WHERE transaction_id = ?"
+      "SELECT operation, occurred_at, reverses_transaction_id, adjusts_transaction_id FROM ledger_transactions WHERE transaction_id = ?"
     )
     try
       statement.setString(1, transactionId.toString)
@@ -255,7 +323,8 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
             BankingOperation.unsafe(rows.getString(1)),
             NonEmptyVector.fromVectorUnsafe(readEntries(connection, transactionId)),
             rows.getTimestamp(2).toInstant(),
-            Option(rows.getString(3)).map(UUID.fromString)
+            Option(rows.getString(3)).map(UUID.fromString),
+            Option(rows.getString(4)).map(UUID.fromString)
           )
         )
     finally statement.close()
@@ -276,6 +345,7 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
             accountRaw match
               case "Cash"         => LedgerAccount.Cash
               case "BillerClearing" => LedgerAccount.BillerClearing
+              case "Adjustments"    => LedgerAccount.Adjustments
               case _ => throw new IllegalStateException(s"Unknown ledger account: $accountRaw")
         builder += LedgerEntry(
           account,
@@ -289,7 +359,7 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
   private def insertTransaction(connection: Connection, transaction: LedgerTransaction): Unit =
     val txStatement =
       connection.prepareStatement(
-        "INSERT INTO ledger_transactions (transaction_id, operation, occurred_at, reverses_transaction_id) VALUES (?, ?, ?, ?)"
+        "INSERT INTO ledger_transactions (transaction_id, operation, occurred_at, reverses_transaction_id, adjusts_transaction_id) VALUES (?, ?, ?, ?, ?)"
       )
     val entryStatement =
       connection.prepareStatement(
@@ -302,6 +372,7 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
       transaction.reversesTransactionId match
         case Some(original) => txStatement.setString(4, original.toString)
         case None           => txStatement.setString(4, null)
+      txStatement.setString(5, transaction.adjustsTransactionId.map(_.toString).orNull)
       txStatement.executeUpdate()
 
       var index = 0
@@ -310,6 +381,7 @@ final class H2LedgerRepository(database: Database) extends LedgerRepository:
           case LedgerAccount.Customer(accountId) => ("Customer", Some(accountId.value))
           case LedgerAccount.Cash                => ("Cash", None)
           case LedgerAccount.BillerClearing      => ("BillerClearing", None)
+          case LedgerAccount.Adjustments         => ("Adjustments", None)
         entryStatement.setString(1, transaction.transactionId.toString)
         entryStatement.setInt(2, index)
         entryStatement.setString(3, accountRaw)

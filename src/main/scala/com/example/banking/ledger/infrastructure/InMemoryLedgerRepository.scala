@@ -11,6 +11,7 @@ import com.example.domain.DomainError
 
 final class InMemoryLedgerRepository extends LedgerRepository:
   private var journal = Vector.empty[LedgerTransaction]
+  private var memos = Map.empty[UUID, AdjustmentMemo]
 
   override def balance(accountId: AccountId): BigDecimal = synchronized {
     balanceOf(accountId)
@@ -32,8 +33,40 @@ final class InMemoryLedgerRepository extends LedgerRepository:
             "Transfers must use atomic transfer posting"
           )
         )
+      else if transaction.operation == BankingOperation.Adjustment then
+        Left(LedgerError.InvalidTransaction("Adjustments must be posted with a memo"))
       else append(transaction)
     }
+
+  override def adjust(
+      transaction: LedgerTransaction,
+      memo: AdjustmentMemo
+  ): Either[DomainError, Account] =
+    synchronized {
+      val accountId = customerAccountOf(transaction)
+      for
+        _ <- transaction.adjustsTransactionId.fold(Right(()))(checkAdjustable(_, accountId))
+        account <- append(transaction)
+      yield
+        memos = memos.updated(transaction.transactionId, memo)
+        account
+    }
+
+  override def adjustmentMemos(accountId: AccountId): Map[UUID, AdjustmentMemo] =
+    synchronized {
+      journal.collect {
+        case transaction if customerEntry(transaction, accountId).nonEmpty &&
+              memos.contains(transaction.transactionId) =>
+          transaction.transactionId -> memos(transaction.transactionId)
+      }.toMap
+    }
+
+  private def checkAdjustable(transactionId: UUID, accountId: AccountId): Either[DomainError, Unit] =
+    journal.find(_.transactionId == transactionId) match
+      case None => Left(BankingError.AdjustedTransactionNotFound(transactionId))
+      case Some(original) if customerEntry(original, accountId).isEmpty =>
+        Left(BankingError.AdjustedTransactionAccountMismatch(transactionId, accountId.value))
+      case Some(_) => Right(())
 
   override def transfer(
       transaction: LedgerTransaction,
@@ -103,10 +136,8 @@ final class InMemoryLedgerRepository extends LedgerRepository:
     if journal.exists(_.transactionId == transaction.transactionId) then
       Left(LedgerError.DuplicateTransaction(transaction.transactionId))
     else
-      val (accountId, customerLedgerEntry) = transaction.entries.collectFirst {
-        case entry @ LedgerEntry(LedgerAccount.Customer(accountId), _, _, _) =>
-          accountId -> entry
-      }.get
+      val accountId = customerAccountOf(transaction)
+      val customerLedgerEntry = customerEntry(transaction, accountId).get
       val currentBalance = balanceOf(accountId)
 
       customerLedgerEntry.direction match
@@ -156,7 +187,8 @@ final class InMemoryLedgerRepository extends LedgerRepository:
               if reversedTransactionIds.contains(transaction.transactionId) then
                 AccountActivityStatus.Reversed
               else AccountActivityStatus.Posted,
-            originalTransactionId = transaction.reversesTransactionId,
+            originalTransactionId =
+              transaction.reversesTransactionId.orElse(transaction.adjustsTransactionId),
             counterpartyAccountId =
               if transaction.operation == BankingOperation.Transfer then
                 transaction.entries.collectFirst {
@@ -168,6 +200,11 @@ final class InMemoryLedgerRepository extends LedgerRepository:
           balanceAfter -> Some(activity)
         case None => runningBalance -> None
     }
+
+  private def customerAccountOf(transaction: LedgerTransaction): AccountId =
+    transaction.entries.collectFirst {
+      case LedgerEntry(LedgerAccount.Customer(accountId), _, _, _) => accountId
+    }.get
 
   private def customerEntry(
       transaction: LedgerTransaction,

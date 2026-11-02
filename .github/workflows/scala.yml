@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [ui, admin-ui]
+        app: [ui, admin-ui, ui-elm]
 
     steps:
     - uses: actions/checkout@v5
@@ -55,9 +55,14 @@ jobs:
       run: bun run test
 
   ui-e2e:
-    name: Customer UI E2E
+    name: Customer UI E2E (${{ matrix.app }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # The Angular app's Playwright specs run against each port of the customer UI.
+        app: [ui, ui-elm]
 
     steps:
     - uses: actions/checkout@v5
@@ -76,17 +81,23 @@ jobs:
     - name: Install customer UI dependencies
       working-directory: ui
       run: bun install --frozen-lockfile
+    - name: Install ${{ matrix.app }} dependencies
+      if: matrix.app != 'ui'
+      working-directory: ${{ matrix.app }}
+      run: bun install --frozen-lockfile
     - name: Install Playwright Chromium
       working-directory: ui
       run: bunx playwright install --with-deps chromium
     - name: Run customer UI E2E tests
       working-directory: ui
+      env:
+        E2E_APP: ${{ matrix.app }}
       run: bun run e2e
     - name: Upload Playwright failure artifacts
       if: failure()
       uses: actions/upload-artifact@v6
       with:
-        name: customer-ui-playwright-results
+        name: customer-${{ matrix.app }}-playwright-results
         path: ui/test-results
         if-no-files-found: ignore
         retention-days: 7

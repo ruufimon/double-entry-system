@@ -3,7 +3,13 @@ package com.example.banking.ledger
 import java.time.Instant
 import java.util.UUID
 
-import com.example.banking.domain.{Account, AccountActivity, AccountId, TransferAccounts}
+import com.example.banking.domain.{
+  Account,
+  AccountActivity,
+  AccountId,
+  AdjustmentMemo,
+  TransferAccounts
+}
 import com.example.domain.DomainError
 
 trait LedgerRepository:
@@ -21,3 +27,9 @@ trait LedgerRepository:
       occurredAt: Instant
   ): Either[DomainError, Account]
   def activities(accountId: AccountId): Vector[AccountActivity]
+
+  /** Posts an adjustment and its memo atomically. A linked transaction must touch the account. */
+  def adjust(transaction: LedgerTransaction, memo: AdjustmentMemo): Either[DomainError, Account]
+
+  /** Memos of the account's adjustments, keyed by transaction ID. */
+  def adjustmentMemos(accountId: AccountId): Map[UUID, AdjustmentMemo]

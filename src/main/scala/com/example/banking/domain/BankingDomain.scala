@@ -33,6 +33,9 @@ object Money:
   def positiveTransfer(amount: BigDecimal): Either[BankingError, Money] =
     positive(amount).left.map(BankingError.InvalidTransferAmount.apply)
 
+  def positiveAdjustment(amount: BigDecimal): Either[BankingError, Money] =
+    positive(amount).left.map(BankingError.InvalidAdjustmentAmount.apply)
+
   def positive(amount: BigDecimal): Either[String, Money] =
     if amount <= 0 then
       Left("Amount must be greater than zero")
@@ -79,6 +82,73 @@ trait DomainEvent extends InternalMessage derives CanEqual
 final case class DepositId(value: UUID) derives CanEqual
 final case class WithdrawalId(value: UUID) derives CanEqual
 final case class TransferId(value: UUID) derives CanEqual
+final case class AdjustmentId(value: UUID) derives CanEqual
+
+object AdjustmentId:
+  /** The admin's idempotency key doubles as the adjustment's ledger transaction ID. */
+  def fromIdempotencyKey(rawKey: Option[String]): Either[BankingError, AdjustmentId] =
+    rawKey
+      .map(_.trim)
+      .flatMap(key => scala.util.Try(UUID.fromString(key)).toOption.filter(_.toString == key.toLowerCase))
+      .map(AdjustmentId.apply)
+      .toRight(BankingError.InvalidIdempotencyKey)
+
+enum AdjustmentDirection derives CanEqual:
+  case Credit, Debit
+
+object AdjustmentDirection:
+  def from(rawDirection: Option[String]): Either[BankingError, AdjustmentDirection] =
+    rawDirection match
+      case Some("credit") => Right(AdjustmentDirection.Credit)
+      case Some("debit")  => Right(AdjustmentDirection.Debit)
+      case _              => Left(BankingError.InvalidAdjustmentDirection)
+
+  def unsafe(name: String): AdjustmentDirection = AdjustmentDirection.valueOf(name)
+
+final case class AdjustmentReason private (value: String) derives CanEqual
+
+object AdjustmentReason:
+  val MaxLength = 500
+
+  def from(rawReason: Option[String]): Either[BankingError, AdjustmentReason] =
+    val reason = rawReason.fold("")(_.trim)
+    if reason.isEmpty then
+      Left(BankingError.InvalidAdjustmentReason("Reason is required"))
+    else if reason.length > MaxLength then
+      Left(BankingError.InvalidAdjustmentReason(s"Reason must be at most $MaxLength characters"))
+    else Right(AdjustmentReason(reason))
+
+  /** Constructs from an already-validated value (trusted persisted data). */
+  def unsafe(value: String): AdjustmentReason = AdjustmentReason(value)
+
+final case class AdminActor private (value: String) derives CanEqual
+
+object AdminActor:
+  val MaxLength = 128
+
+  def from(rawActor: Option[String]): Either[BankingError, AdminActor] =
+    rawActor
+      .map(_.trim)
+      .filter(actor => actor.nonEmpty && actor.length <= MaxLength)
+      .map(AdminActor.apply)
+      .toRight(BankingError.MissingAdminActor)
+
+  /** Constructs from an already-validated value (trusted persisted data). */
+  def unsafe(value: String): AdminActor = AdminActor(value)
+
+/** Who made an adjustment and why; stored alongside its ledger transaction. */
+final case class AdjustmentMemo(reason: AdjustmentReason, actor: AdminActor) derives CanEqual
+
+final case class BalanceAdjustment(
+    adjustmentId: AdjustmentId,
+    accountId: AccountId,
+    direction: AdjustmentDirection,
+    amount: Money,
+    memo: AdjustmentMemo,
+    adjustsTransactionId: Option[UUID],
+    balanceAfter: BigDecimal,
+    occurredAt: Instant
+) derives CanEqual
 
 final case class DepositCompleted(
     depositId: DepositId,
@@ -106,8 +176,11 @@ final case class TransferCompleted(
     occurredAt: Instant
 ) extends DomainEvent
 
+final case class BalanceAdjusted(adjustment: BalanceAdjustment) extends DomainEvent:
+  override def occurredAt: Instant = adjustment.occurredAt
+
 enum BankingOperation derives CanEqual:
-  case Deposit, Withdrawal, Transfer, BillPayment, BillPaymentReversal
+  case Deposit, Withdrawal, Transfer, BillPayment, BillPaymentReversal, Adjustment
 
 object BankingOperation:
   def unsafe(name: String): BankingOperation = BankingOperation.valueOf(name)
@@ -198,3 +271,32 @@ enum BankingError(val code: String, val message: String) extends DomainError der
       )
   case InvalidRequest(details: String)
       extends BankingError("invalid_request", details)
+  case InvalidAdjustmentAmount(details: String)
+      extends BankingError("invalid_adjustment_amount", details)
+  case InvalidAdjustmentDirection
+      extends BankingError(
+        "invalid_adjustment_direction",
+        "Adjustment direction must be 'credit' or 'debit'"
+      )
+  case InvalidAdjustmentReason(details: String)
+      extends BankingError("invalid_adjustment_reason", details)
+  case MissingAdminActor
+      extends BankingError(
+        "missing_admin_actor",
+        s"X-Admin-Actor header must name the acting admin (1 to ${AdminActor.MaxLength} characters)"
+      )
+  case InvalidIdempotencyKey
+      extends BankingError(
+        "invalid_idempotency_key",
+        "Idempotency-Key header must be a UUID"
+      )
+  case AdjustedTransactionNotFound(transactionId: UUID)
+      extends BankingError(
+        "adjusted_transaction_not_found",
+        s"Adjusted transaction '$transactionId' was not found"
+      )
+  case AdjustedTransactionAccountMismatch(transactionId: UUID, accountId: String)
+      extends BankingError(
+        "adjusted_transaction_account_mismatch",
+        s"Transaction '$transactionId' does not belong to account '$accountId'"
+      )

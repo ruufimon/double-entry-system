@@ -1,0 +1,29 @@
+# Builds the Elm customer UI and serves it with nginx, proxying /api to the banking API.
+# Build from the repository root: docker build -f Dockerfile.ui-elm -t banking-ui-elm .
+
+# Elm 0.19.1 ships no linux/arm64 compiler, so build on amd64 (emulated on Apple
+# Silicon). The output is static files, so the final image stays native.
+FROM --platform=linux/amd64 oven/bun:1.3.14-slim AS bun
+FROM --platform=linux/amd64 node:24-slim AS build
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
+# The Elm compiler downloads packages over HTTPS using the system CA store.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY ui-elm/package.json ui-elm/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY ui-elm/ .
+RUN bun run build
+
+FROM nginxinc/nginx-unprivileged:1.29-alpine
+# Base URL of the banking API, without a trailing slash. The default matches the
+# Compose service name; on other hosts set it to the API's private or public URL.
+ENV API_URL=http://api:8080
+# Port nginx listens on; hosts such as Railway override it.
+ENV PORT=8080
+# Let the entrypoint expose the container's DNS servers as NGINX_LOCAL_RESOLVERS.
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+COPY ui-elm/nginx/default.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 8080

@@ -6,6 +6,7 @@ import java.util.UUID
 import com.example.banking.application.{
   AccountMessageHandler,
   AccountService,
+  AdjustmentService,
   AuditLogService,
   DepositService,
   TransferService,
@@ -78,8 +79,17 @@ object Server:
   private[example] def create(port: Int): BankingApiServer =
     create(port, sys.env.get("BILLER_URL").filter(_.nonEmpty))
 
-  /** Uses the fake biller over HTTP when `billerUrl` is set, otherwise an in-process biller. */
   private[example] def create(port: Int, billerUrl: Option[String]): BankingApiServer =
+    create(port, billerUrl, sys.env.get("ADMIN_TOKEN").filter(_.nonEmpty))
+
+  /** Uses the fake biller over HTTP when `billerUrl` is set, otherwise an in-process biller.
+    * Admin balance adjustments are disabled unless `adminToken` is set.
+    */
+  private[example] def create(
+      port: Int,
+      billerUrl: Option[String],
+      adminToken: Option[String]
+  ): BankingApiServer =
     val server = new JettyServer(port)
     val context = new ServletContextHandler()
     val (dbUrl, dbUser, dbPassword) = databaseFromEnv()
@@ -127,6 +137,11 @@ object Server:
       Clock.systemUTC(),
       () => UUID.randomUUID()
     )
+    val adjustmentService = new AdjustmentService(
+      accountOperations,
+      messageBus,
+      Clock.systemUTC()
+    )
     val billPaymentService = new BillPaymentService(
       billerGateway,
       inquiryRepository,
@@ -163,7 +178,7 @@ object Server:
       "/accounts/*"
     )
     context.addServlet(
-      new ServletHolder(new AdminServlet(accountOperations)),
+      new ServletHolder(new AdminServlet(accountOperations, adjustmentService, adminToken)),
       "/admin/*"
     )
     server.setHandler(context)

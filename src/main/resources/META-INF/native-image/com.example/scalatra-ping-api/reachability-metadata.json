@@ -1871,5 +1871,19 @@
     {
       "glob": "META-INF/services/org.flywaydb.core.extensibility.Plugin"
     }
+  ],
+  "serialization": [
+    {
+      "name": "org.flywaydb.database.postgresql.PostgreSQLConfigurationExtension"
+    },
+    {
+      "name": "org.flywaydb.database.h2.H2ConfigurationExtension"
+    },
+    {
+      "name": "org.flywaydb.core.internal.command.clean.CleanModeConfigurationExtension"
+    },
+    {
+      "name": "org.flywaydb.core.internal.command.clean.CleanModel"
+    }
   ]
 }

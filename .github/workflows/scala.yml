@@ -7,9 +7,13 @@ name: Scala CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - "main"
+      - "cursor/**"
+      - "feat/**"
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 permissions:
   contents: read

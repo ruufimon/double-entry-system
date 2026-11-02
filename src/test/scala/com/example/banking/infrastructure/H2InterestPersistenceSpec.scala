@@ -16,9 +16,9 @@ final class H2InterestPersistenceSpec extends AnyFunSuite with Matchers:
 
   test("H2 persists rate and processing state and records one interest credit per month") {
     val database = Database.open(
-      Database.memoryUrl(s"interest-${UUID.randomUUID()}"),
-      DatabaseConfig.DefaultUser,
-      DatabaseConfig.DefaultPassword
+      Database.h2MemoryUrl(s"interest-${UUID.randomUUID()}"),
+      "",
+      ""
     )
     try
       val accountRepository = new H2AccountRepository(database)

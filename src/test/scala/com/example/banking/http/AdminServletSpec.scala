@@ -26,7 +26,7 @@ final class AdminServletSpec extends ScalatraFunSuite:
     Clock.fixed(occurredAt, ZoneOffset.UTC)
   )
 
-  addServlet(new AdminServlet(operations, adjustmentService, Some(adminToken)), "/admin/*")
+  addServlet(new AdminServlet(operations, adjustmentService, None, Some(adminToken), None), "/admin/*")
 
   test("GET /admin/accounts returns an empty list") {
     get("/admin/accounts") {

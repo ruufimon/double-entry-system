@@ -4,8 +4,8 @@ import java.nio.charset.StandardCharsets
 import java.time.{Clock, Instant, ZoneId}
 import java.util.Base64
 
-import com.example.banking.application.InterestRateService
-import com.example.banking.infrastructure.{InMemoryAccountRepository, InMemoryInterestSettingsRepository}
+import com.example.banking.application.{AdjustmentService, InterestRateService}
+import com.example.banking.infrastructure.{InMemoryAccountRepository, InMemoryInterestSettingsRepository, LocalMessageBus}
 import com.example.banking.ledger.LedgerBackedAccountOperations
 import com.example.banking.ledger.infrastructure.InMemoryLedgerRepository
 import org.json4s.*
@@ -16,6 +16,9 @@ final class AdminInterestRateServletSpec extends ScalatraFunSuite:
   private implicit val jsonFormats: Formats = DefaultFormats
   private val accountRepository = new InMemoryAccountRepository()
   private val ledgerRepository = new InMemoryLedgerRepository()
+  private val messageBus = new LocalMessageBus()
+  private val accountOperations = new LedgerBackedAccountOperations(ledgerRepository, accountRepository)
+  private val adjustmentService = new AdjustmentService(accountOperations, messageBus, Clock.systemUTC())
   private val service = new InterestRateService(
     ledgerRepository,
     accountRepository,
@@ -27,8 +30,10 @@ final class AdminInterestRateServletSpec extends ScalatraFunSuite:
 
   addServlet(
     new AdminServlet(
-      new LedgerBackedAccountOperations(ledgerRepository, accountRepository),
+      accountOperations,
+      adjustmentService,
       Some(service),
+      None,
       Some("secret")
     ),
     "/admin/*"

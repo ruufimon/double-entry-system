@@ -1,4 +1,5 @@
 package com.example.acceptance
+import java.time.Clock
 
 import java.net.URI
 import java.net.http.HttpClient
@@ -322,7 +323,7 @@ final class BalanceAdjustmentAcceptanceSpec
 
     Scenario("adjustments are disabled when no admin token is configured") {
       apiServer.close()
-      apiServer = Server.create(0, billerUrl = None, adminToken = None)
+      apiServer = Server.create(0, billerUrl = None, adminToken = None, adminPassword = None, clock = Clock.systemUTC(), businessZone = java.time.ZoneId.of("Asia/Bangkok"))
       apiServer.start()
       fundAccount("adjust-disabled", "10.00")
 

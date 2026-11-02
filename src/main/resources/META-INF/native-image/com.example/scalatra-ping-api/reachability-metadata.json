@@ -1437,6 +1437,15 @@
       ]
     },
     {
+      "type": "org.flywaydb.database.postgresql.PostgreSQLConfigurationExtension",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true,
+      "allPublicConstructors": true,
+      "allPublicMethods": true,
+      "allPublicFields": true
+    },
+    {
       "type": "org.flywaydb.database.h2.H2DatabaseType",
       "methods": [
         {
@@ -1444,6 +1453,15 @@
           "parameterTypes": []
         }
       ]
+    },
+    {
+      "type": "org.flywaydb.database.h2.H2ConfigurationExtension",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true,
+      "allPublicConstructors": true,
+      "allPublicMethods": true,
+      "allPublicFields": true
     },
     {
       "type": "org.postgresql.jdbc.PgConnection"

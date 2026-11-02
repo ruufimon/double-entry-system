@@ -37,6 +37,77 @@ jobs:
       run: sbt test
       # Optional: This step uploads information to the GitHub dependency graph and unblocking Dependabot alerts for the repository
 
+  native-image-smoke:
+    name: Native Image Smoke Test (Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: banking
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v5
+    - name: Set up GraalVM
+      uses: graalvm/setup-graalvm@v1
+      with:
+        java-version: '21'
+        distribution: 'graalvm-community'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        native-image-job-reports: 'true'
+    - name: Set up sbt
+      uses: sbt/setup-sbt@v1
+    - name: Build staged JAR
+      run: sbt stage
+    - name: Build native image
+      run: |
+        native-image \
+          --no-fallback \
+          -march=compatibility \
+          -H:+ReportExceptionStackTraces \
+          -cp "target/out/jvm/scala-3.6.2/scalatra-ping-api/universal/stage/lib/*" \
+          -o banking-api \
+          com.example.Server
+    - name: Smoke test against Postgres
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/banking
+        DB_REQUIRE_POSTGRES: "true"
+        PORT: "8080"
+      run: |
+        ./banking-api &
+        API_PID=$!
+        sleep 5
+        
+        if ! kill -0 $API_PID 2>/dev/null; then
+          echo "Native image failed to start"
+          exit 1
+        fi
+        
+        curl -f http://localhost:8080/ping || exit 1
+        
+        PGPASSWORD=postgres psql -h localhost -U postgres -d banking -c "SELECT * FROM flyway_schema_history ORDER BY installed_rank;" || exit 1
+        
+        V1_COUNT=$(PGPASSWORD=postgres psql -h localhost -U postgres -d banking -t -c "SELECT COUNT(*) FROM flyway_schema_history WHERE version = '1';")
+        V2_COUNT=$(PGPASSWORD=postgres psql -h localhost -U postgres -d banking -t -c "SELECT COUNT(*) FROM flyway_schema_history WHERE version = '2';")
+        
+        if [ "$V1_COUNT" -lt 1 ] || [ "$V2_COUNT" -lt 1 ]; then
+          echo "Migrations V1 or V2 not found in flyway_schema_history"
+          exit 1
+        fi
+        
+        kill $API_PID
+
   ui-unit:
     name: ${{ matrix.app }} Unit Tests
     runs-on: ubuntu-latest

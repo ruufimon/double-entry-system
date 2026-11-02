@@ -72,11 +72,13 @@ jobs:
       run: sbt stage
     - name: Build native image
       run: |
+        STAGE_DIR=$(find target/out/jvm -type d -path "*/scalatra-ping-api/universal/stage" | head -1)
+        CLASSPATH=$(find "$STAGE_DIR/lib" -name "*.jar" | tr '\n' ':')
         native-image \
           --no-fallback \
           -march=compatibility \
           -H:+ReportExceptionStackTraces \
-          -cp "target/out/jvm/scala-3.6.2/scalatra-ping-api/universal/stage/lib/*" \
+          -cp "$CLASSPATH" \
           -o banking-api \
           com.example.Server
     - name: Smoke test against Postgres

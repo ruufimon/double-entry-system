@@ -1446,6 +1446,51 @@
       ]
     },
     {
+      "type": "org.postgresql.jdbc.PgConnection"
+    },
+    {
+      "type": "org.postgresql.jdbc.PgDatabaseMetaData"
+    },
+    {
+      "type": "org.postgresql.jdbc.PgPreparedStatement"
+    },
+    {
+      "type": "org.postgresql.jdbc.PgResultSet"
+    },
+    {
+      "type": "org.postgresql.jdbc.PgStatement"
+    },
+    {
+      "type": "org.flywaydb.core.api.MigrationVersion"
+    },
+    {
+      "type": "org.flywaydb.core.api.resolver.MigrationResolver"
+    },
+    {
+      "type": "org.flywaydb.core.internal.resolver.sql.SqlMigrationResolver",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.flywaydb.core.internal.resolver.java.JavaMigrationResolver",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.flywaydb.core.internal.scanner.LocationScannerCache"
+    },
+    {
+      "type": "org.flywaydb.core.internal.scanner.Scanner"
+    },
+    {
       "type": "org.json4s.Extraction$",
       "fields": [
         {
@@ -1768,6 +1813,18 @@
     },
     {
       "bundle": "jakarta.servlet.http.LocalStrings"
+    },
+    {
+      "glob": "db/migration/V*.sql"
+    },
+    {
+      "glob": "org/flywaydb/**"
+    },
+    {
+      "glob": "org/postgresql/**/*.properties"
+    },
+    {
+      "glob": "META-INF/services/org.flywaydb.core.extensibility.Plugin"
     }
   ]
 }

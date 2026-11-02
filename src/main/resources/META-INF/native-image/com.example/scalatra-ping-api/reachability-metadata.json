@@ -1464,6 +1464,33 @@
       "allPublicFields": true
     },
     {
+      "type": "org.flywaydb.core.internal.command.clean.CleanModeConfigurationExtension",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true,
+      "allPublicConstructors": true,
+      "allPublicMethods": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "org.flywaydb.core.internal.command.clean.CleanModel",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true,
+      "allPublicConstructors": true,
+      "allPublicMethods": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "org.flywaydb.core.extensibility.ConfigurationExtension",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true,
+      "allPublicConstructors": true,
+      "allPublicMethods": true,
+      "allPublicFields": true
+    },
+    {
       "type": "org.postgresql.jdbc.PgConnection"
     },
     {

@@ -1,5 +1,6 @@
 package com.example.biller
 
+import com.example.http.JsonErrors
 import java.time.{Duration, Instant}
 
 import scala.util.Try
@@ -44,7 +45,8 @@ final case class FakeBillerErrorResponse(error: String, message: String)
 /** HTTP API of a fake external biller, used to demonstrate bill payment. */
 final class FakeBillerServlet(store: FakeBillerStore, settleTimeoutDelay: Duration)
     extends ScalatraServlet
-    with JacksonJsonSupport:
+    with JacksonJsonSupport
+    with JsonErrors:
 
   override protected implicit lazy val jsonFormats: Formats = DefaultFormats
 

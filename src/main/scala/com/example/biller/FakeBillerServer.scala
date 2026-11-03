@@ -39,6 +39,8 @@ object FakeBillerServer:
     val context = new ServletContextHandler()
     val store = new FakeBillerStore(FakeBillerStore.DefaultSeed, latencyMs)
     context.setContextPath("/")
+    // Development mode, the default, renders stack traces and route listings.
+    context.setInitParameter("org.scalatra.environment", "production")
     context.addServlet(
       new ServletHolder(new FakeBillerServlet(store, settleTimeoutDelay)),
       "/*"

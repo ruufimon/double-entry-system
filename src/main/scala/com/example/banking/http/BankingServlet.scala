@@ -1,5 +1,6 @@
 package com.example.banking.http
 
+import com.example.http.JsonErrors
 import scala.util.control.NonFatal
 
 import com.example.banking.application.{AccountService, DepositService, TransferService, WithdrawService}
@@ -64,7 +65,8 @@ final class BankingServlet(
 )
     extends ScalatraServlet
     with JacksonJsonSupport
-    with BillPaymentRoutes:
+    with BillPaymentRoutes
+    with JsonErrors:
 
   override protected implicit lazy val jsonFormats: Formats = DefaultFormats
 

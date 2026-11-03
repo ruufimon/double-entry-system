@@ -221,6 +221,8 @@ object Server:
     auditLogService.subscribe()
 
     context.setContextPath("/")
+    // Development mode, the default, renders stack traces and route listings.
+    context.setInitParameter("org.scalatra.environment", "production")
     context.addServlet(new ServletHolder(new PingServlet()), "/*")
     context.addServlet(
       new ServletHolder(

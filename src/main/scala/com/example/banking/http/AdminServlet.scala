@@ -1,5 +1,6 @@
 package com.example.banking.http
 
+import com.example.http.JsonErrors
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.{Base64, UUID}
@@ -83,7 +84,8 @@ final class AdminServlet(
     adminPassword: Option[String]
 )
     extends ScalatraServlet
-    with JacksonJsonSupport:
+    with JacksonJsonSupport
+    with JsonErrors:
 
   override protected implicit lazy val jsonFormats: Formats = DefaultFormats
 

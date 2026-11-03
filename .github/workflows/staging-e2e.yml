@@ -6,12 +6,12 @@ on:
       customer_url:
         description: Public URL of the pre-prod customer UI
         required: true
-        default: https://banking-preprod-ui-wamur.ondigitalocean.app
+        default: https://preprod-ui.139-59-219-31.sslip.io
         type: string
       admin_url:
         description: Public URL of the pre-prod admin UI
         required: true
-        default: https://banking-preprod-admin-ui-hr4z8.ondigitalocean.app
+        default: https://preprod-admin.139-59-219-31.sslip.io
         type: string
       include_bill_payment:
         description: Run the single-use demo bill lifecycle (requires a freshly restarted staging API)

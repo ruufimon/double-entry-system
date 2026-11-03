@@ -6,7 +6,7 @@ PostgreSQL databases and the container registry are the same ones App Platform u
 
 | Environment | Namespace | Status | Customer UI |
 | --- | --- | --- | --- |
-| Pre-production | `preprod` | Live | https://preprod-ui.139-59-219-31.sslip.io |
+| Pre-production | `preprod` | Live (App Platform's pre-prod was removed) | https://preprod-ui.139-59-219-31.sslip.io |
 | Production | `prod` | Not deployed: needs a domain first | (still on App Platform) |
 
 The pre-production hosts use [sslip.io](https://sslip.io), which resolves a name
@@ -83,8 +83,9 @@ follow it with a normal deploy of the commit you want.
 
 - **Connection limit.** The smallest managed Postgres plan allows about 22
   connections. A rollout briefly runs two API pods, so the API's pool is capped
-  with `DB_POOL_SIZE=4`. Count every process using a database (including App
-  Platform's) before raising it.
+  with `DB_POOL_SIZE=4`. Count every process using a database before raising it:
+  the first CI deploy failed and rolled back while App Platform's pre-prod API
+  still held 10 connections on the same database.
 - **Registry access.** `doctl kubernetes cluster registry add` reported success
   but created nothing. The bootstrap writes a read-only pull secret into each
   namespace instead.

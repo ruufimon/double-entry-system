@@ -335,13 +335,14 @@ docker run --rm -p 4300:8080 -e API_URL=http://host.docker.internal:8080 banking
 
 ### DigitalOcean
 
-Production and pre-production run on DigitalOcean App Platform in `sgp1`.
-Each environment has four apps and its own managed PostgreSQL 17 database:
+Production runs on DigitalOcean App Platform, and pre-production on DigitalOcean
+Kubernetes (see [`k8s/`](k8s/README.md)), both in `sgp1`. Each environment has its
+own managed PostgreSQL 17 database:
 
-| Environment | Specs | Image tag | Database | Customer UI |
+| Environment | Runs on | Config | Database | Customer UI |
 | --- | --- | --- | --- | --- |
-| Production | [`.do/prod`](.do/prod) | `prod` | `banking-prod-db` | https://banking-preprod-ui-kgmgi.ondigitalocean.app |
-| Pre-production | [`.do/preprod`](.do/preprod) | `preprod` | `banking-preprod-db` | https://banking-preprod-ui-wamur.ondigitalocean.app |
+| Production | App Platform, `prod` tag | [`.do/prod`](.do/prod) | `banking-prod-db` | https://banking-preprod-ui-kgmgi.ondigitalocean.app |
+| Pre-production | Kubernetes, `preprod` namespace | [`k8s/overlays/preprod`](k8s/overlays/preprod) | `banking-preprod-db` | https://preprod-ui.139-59-219-31.sslip.io |
 
 The production URLs still say `preprod`, because App Platform keeps an app's
 original domain when it is renamed. Attach a custom domain to change that.
@@ -357,8 +358,8 @@ redeploy the app, because the rule takes effect only for new deployments.
 
 Releases:
 
-1. A push to `main` that passes every CI job pushes each image as `:<sha>` and
-   `:preprod`, and pre-production redeploys.
+1. A push to `main` that passes every CI job pushes each image as `:<sha>`, and
+   the `Deploy to Kubernetes pre-prod` job rolls that commit out to pre-production.
 2. The `Promote to production` job then waits for approval in the
    `production` GitHub environment. Approving it re-tags the same `:<sha>`
    images as `:prod`, and production redeploys. Nothing is rebuilt.

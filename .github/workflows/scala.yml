@@ -217,12 +217,12 @@ jobs:
         if-no-files-found: ignore
         retention-days: 7
 
-  # Publishes images for the DigitalOcean pre-production apps (see .do/preprod).
+  # Publishes the commit's images to the DigitalOcean registry.
   # Runs only after every test job passes, and only when the repository
   # variable DO_DEPLOY is "true" and the secret DIGITALOCEAN_ACCESS_TOKEN is set.
-  # Each image is pushed as :<sha>, and as :preprod for the App Platform branches;
-  # promote-prod later re-tags the same :<sha> as :prod. The k8s branch only pushes
-  # :<sha>, which deploy-k8s-preprod deploys, so it never moves App Platform.
+  # Each image is pushed as :<sha>, which deploy-k8s-preprod deploys and promote-prod
+  # later re-tags as :prod. The main and cursor branches also move :preprod, the
+  # last build that reached pre-prod; the k8s branch never does.
   publish-preprod-images:
     name: Publish pre-prod image (${{ matrix.image }})
     needs: [build, native-image-smoke, ui-unit, ui-e2e, admin-e2e]

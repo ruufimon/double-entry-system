@@ -7,21 +7,21 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: ui.prod.invalid
+    - host: app.139-59-219-31.sslip.io
       http:
         paths:
           - {path: /, pathType: Prefix, backend: {service: {name: ui, port: {number: 8080}}}}
-    - host: admin.prod.invalid
+    - host: admin.139-59-219-31.sslip.io
       http:
         paths:
           - {path: /, pathType: Prefix, backend: {service: {name: admin-ui, port: {number: 8080}}}}
-    - host: elm.prod.invalid
+    - host: elm.139-59-219-31.sslip.io
       http:
         paths:
           - {path: /, pathType: Prefix, backend: {service: {name: ui-elm, port: {number: 8080}}}}
   tls:
     - secretName: banking-tls
       hosts:
-        - ui.prod.invalid
-        - admin.prod.invalid
-        - elm.prod.invalid
+        - app.139-59-219-31.sslip.io
+        - admin.139-59-219-31.sslip.io
+        - elm.139-59-219-31.sslip.io

@@ -1,10 +1,12 @@
-# NOT IN USE YET. Production moves to Kubernetes only once it has a domain; replace the
-# placeholder hosts in ingress.yaml with it first. Production still runs on App Platform.
+# Production. The hosts are sslip.io names for the load balancer's IP until there is
+# a real domain: change the three hosts in ingress.yaml to switch.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: prod
 resources:
   - ../../base
+  # Temporary, until 2026-11-10; see the file.
+  - transition-api.yaml
 # CI replaces newTag with the commit being deployed. Do not use mutable tags for rollbacks.
 images:
   - name: registry.digitalocean.com/double-entry-banking/banking-api

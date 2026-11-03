@@ -335,45 +335,36 @@ docker run --rm -p 4300:8080 -e API_URL=http://host.docker.internal:8080 banking
 
 ### DigitalOcean
 
-Production runs on DigitalOcean App Platform, and pre-production on DigitalOcean
-Kubernetes (see [`k8s/`](k8s/README.md)), both in `sgp1`. Each environment has its
-own managed PostgreSQL 17 database:
+Production and pre-production run on DigitalOcean Kubernetes (DOKS) in `sgp1`,
+one namespace each, with its own managed PostgreSQL 17 database. See
+[`k8s/README.md`](k8s/README.md) for the cluster, manifests and operations.
 
-| Environment | Runs on | Config | Database | Customer UI |
+| Environment | Namespace | Database | Customer UI | Admin UI |
 | --- | --- | --- | --- | --- |
-| Production | App Platform, `prod` tag | [`.do/prod`](.do/prod) | `banking-prod-db` | https://banking-preprod-ui-kgmgi.ondigitalocean.app |
-| Pre-production | Kubernetes, `preprod` namespace | [`k8s/overlays/preprod`](k8s/overlays/preprod) | `banking-preprod-db` | https://preprod-ui.139-59-219-31.sslip.io |
+| Production | `prod` | `banking-prod-db` | https://app.139-59-219-31.sslip.io | https://admin.139-59-219-31.sslip.io |
+| Pre-production | `preprod` | `banking-preprod-db` | https://preprod-ui.139-59-219-31.sslip.io | https://preprod-admin.139-59-219-31.sslip.io |
 
-The production URLs still say `preprod`, because App Platform keeps an app's
-original domain when it is renamed. Attach a custom domain to change that.
+The hosts are [sslip.io](https://sslip.io) names for the cluster's load balancer
+until there is a real domain. The API connects as the non-admin database user
+`banking_app`, and only the cluster can reach either database.
 
-Each UI is a separate app because it is built with `<base href="/">`, and it
-proxies `/api/*` to its environment's API over HTTPS. The API connects as the
-non-admin database user `banking_app`. `DATABASE_URL`, `ADMIN_TOKEN` and
-`ADMIN_PASSWORD` are encrypted App Platform secrets, so applying a spec file
-as-is clears them: copy their `EV[...]` values from
-`doctl apps spec get <app-id>` into a local copy first. Each database's
-firewall admits only its own API app. After changing a firewall rule,
-redeploy the app, because the rule takes effect only for new deployments.
+Until 2026-11-10, the old App Platform UI apps in [`.do/prod`](.do/prod) still
+serve the previous production URLs, by calling the Kubernetes API through the
+temporary host `api.139-59-219-31.sslip.io`. Delete those three apps,
+`k8s/overlays/prod/transition-api.yaml` and `.do/` together after that.
 
 Releases:
 
 1. A push to `main` that passes every CI job pushes each image as `:<sha>`, and
-   the `Deploy to Kubernetes pre-prod` job rolls that commit out to pre-production.
-2. The `Promote to production` job then waits for approval in the
-   `production` GitHub environment. Approving it re-tags the same `:<sha>`
-   images as `:prod`, and production redeploys. Nothing is rebuilt.
+   `Deploy to Kubernetes pre-prod` rolls that commit out to pre-production.
+2. `Deploy to production` then waits for approval in the `production` GitHub
+   environment. Approving it deploys the same `:<sha>` images to the `prod`
+   namespace, smoke-tests them without writing anything, and rolls back if
+   either step fails. Nothing is rebuilt.
 
-To roll production back, re-tag an earlier commit as `prod`:
-
-```bash
-doctl registry login
-for image in banking-api banking-biller banking-ui banking-admin-ui banking-ui-elm; do
-  docker buildx imagetools create \
-    --tag registry.digitalocean.com/double-entry-banking/$image:prod \
-    registry.digitalocean.com/double-entry-banking/$image:<sha>
-done
-```
+To roll production back, re-run the `Deploy to production` job of an earlier
+commit. In an emergency, `kubectl -n prod rollout undo deployment/api` takes
+seconds.
 
 The `Registry cleanup` workflow deletes commit tags older than 30 days,
 keeping whatever `prod` and `preprod` point at. It needs the

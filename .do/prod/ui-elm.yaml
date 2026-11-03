@@ -22,4 +22,4 @@ services:
     envs:
       - key: API_URL
         scope: RUN_TIME
-        value: https://banking-preprod-api-etuk3.ondigitalocean.app
+        value: https://api.139-59-219-31.sslip.io

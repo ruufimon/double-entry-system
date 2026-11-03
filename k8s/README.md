@@ -6,11 +6,12 @@ PostgreSQL databases and the container registry are the same ones App Platform u
 
 | Environment | Namespace | Status | Customer UI |
 | --- | --- | --- | --- |
-| Pre-production | `preprod` | Live (App Platform's pre-prod was removed) | https://preprod-ui.139-59-219-31.sslip.io |
-| Production | `prod` | Not deployed: needs a domain first | (still on App Platform) |
+| Production | `prod` | Live since 2026-11-03 | https://app.139-59-219-31.sslip.io |
+| Pre-production | `preprod` | Live | https://preprod-ui.139-59-219-31.sslip.io |
 
-The pre-production hosts use [sslip.io](https://sslip.io), which resolves a name
-containing an IP address to that IP, until there is a real domain. Certificates
+Both environments use [sslip.io](https://sslip.io) hosts, which resolve a name
+containing an IP address to that IP, until there is a real domain. To switch, change
+the three hosts in each overlay's `ingress.yaml`. Certificates
 come from Let's Encrypt, and HTTP redirects to HTTPS.
 
 ## Layout
@@ -63,9 +64,10 @@ GitHub environment, created with:
 k8s/scripts/make-deployer-kubeconfig.sh preprod | gh secret set KUBE_CONFIG --env preprod
 ```
 
-The job runs when the repository variable `K8S_DEPLOY` is `true`. Pushes to the
-`k8s` branch deploy only here. They never move App Platform's `preprod` or `prod`
-tags.
+The job runs when the repository variable `K8S_DEPLOY` is `true`. Production is
+deployed by `Deploy to production`, from `main` only, after an approval in the
+`production` environment, with its own namespace-scoped `KUBE_CONFIG`. Pushes to the
+`k8s` branch deploy only to pre-production.
 
 ## Rollback
 
@@ -102,5 +104,5 @@ follow it with a normal deploy of the commit you want.
 
 - One API replica: the in-process message bus (#8) and the interest scheduler
   aren't safe to run twice. Killing the API pod costs about 8 seconds.
-- Production needs a domain before it can move. The prod overlay has placeholder
-  hosts and is not applied.
+- `overlays/prod/transition-api.yaml` exposes the prod API publicly until
+  2026-11-10, for the old App Platform UIs. Remove it with them.

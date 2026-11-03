@@ -1,8 +1,9 @@
 # Kubernetes (DigitalOcean DOKS)
 
 The banking apps on one DOKS cluster, `banking-k8s` in `sgp1`: a 2-node pool of
-`s-2vcpu-4gb` that autoscales to 3. Each environment is a namespace. The managed
-PostgreSQL databases and the container registry are the same ones App Platform uses.
+`s-2vcpu-4gb` that autoscales to 3. Each environment is a namespace with its own
+managed PostgreSQL database, and images come from the DigitalOcean registry.
+(App Platform hosted both environments until 2026-11-03.)
 
 | Environment | Namespace | Status | Customer UI |
 | --- | --- | --- | --- |
@@ -104,5 +105,3 @@ follow it with a normal deploy of the commit you want.
 
 - One API replica: the in-process message bus (#8) and the interest scheduler
   aren't safe to run twice. Killing the API pod costs about 8 seconds.
-- `overlays/prod/transition-api.yaml` exposes the prod API publicly until
-  2026-11-10, for the old App Platform UIs. Remove it with them.

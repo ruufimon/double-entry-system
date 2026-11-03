@@ -5,8 +5,6 @@ kind: Kustomization
 namespace: prod
 resources:
   - ../../base
-  # Temporary, until 2026-11-10; see the file.
-  - transition-api.yaml
 # CI replaces newTag with the commit being deployed. Do not use mutable tags for rollbacks.
 images:
   - name: registry.digitalocean.com/double-entry-banking/banking-api

@@ -258,8 +258,7 @@ jobs:
     - name: Log in to the DigitalOcean registry
       run: doctl registry login --expiry-seconds 1800
     - uses: docker/setup-buildx-action@v3
-    # Pushing the preprod tag triggers deploy_on_push in App Platform. For
-    # banking-api, native-image-smoke already built this commit into the same
+    # For banking-api, native-image-smoke already built this commit into the same
     # cache scope, so this step reuses its layers.
     - name: Build and push
       uses: docker/build-push-action@v6
@@ -276,9 +275,8 @@ jobs:
 
   # Deploys to production after an approval in the production GitHub environment.
   # Runs from main only, once pre-prod has deployed this commit. It moves the :prod
-  # tag to the same :<sha> (the old App Platform UI apps still follow it), then
-  # deploys that commit to the prod namespace, smoke-tests it read-only, and rolls
-  # back on failure. KUBE_CONFIG in the production environment can only change
+  # tag to the same :<sha>, marking what production runs, then deploys that commit
+  # to the prod namespace, smoke-tests it read-only, and rolls back on failure. KUBE_CONFIG in the production environment can only change
   # workloads in the prod namespace.
   deploy-prod:
     name: Deploy to production

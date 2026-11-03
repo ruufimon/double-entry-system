@@ -97,6 +97,8 @@ In sbt 2, `sbt test` runs the ScalaTest tests that have not passed yet or whose 
 
 ## Configuration
 
+Local development uses H2. Pre-production and production run on PostgreSQL. The rollout plan and acceptance criteria are in [spec/PostgresMigration.md](spec/PostgresMigration.md).
+
 PostgreSQL is selected when `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD` are all set and `PGPORT` is an integer. Otherwise a `DATABASE_URL` of `postgresql://` or `postgres://` with a user, a password, a host, and a database name is used. Its query string is copied into the JDBC URL. A missing port becomes 5432. `PG*` wins over `DATABASE_URL`. An incomplete `PG*` set falls through to `DATABASE_URL`.
 
 If neither is usable, the API uses H2. `DB_URL` is the JDBC URL as given, not a filesystem path. User and password default to `banking` / `banking` (`DB_USER`, `DB_PASSWORD`). When `DB_URL` is unset the URL is `jdbc:h2:mem:banking-<uuid>;DB_CLOSE_DELAY=-1`, which is empty after restart.
@@ -112,15 +114,30 @@ DATABASE_URL=postgresql://user:password@localhost:5432/banking sbt run
 DB_URL='jdbc:h2:file:/path/to/banking;DB_CLOSE_DELAY=-1' sbt run
 ```
 
+`docker compose up` runs the API, customer UI, and admin UI on H2. `docker compose --profile postgres up` also starts a `postgres:17-alpine` service, but the API only uses it when `DATABASE_URL` points at it:
+
+```bash
+ADMIN_PASSWORD=secret \
+DATABASE_URL=postgresql://banking_user:banking_password@postgres:5432/banking \
+DB_REQUIRE_POSTGRES=true \
+docker compose --profile postgres up --build
+```
+
+`banking_password` is the default `POSTGRES_PASSWORD` in `docker-compose.yml`; change both together. `DB_REQUIRE_POSTGRES=true` makes the API fail at startup instead of silently falling back to H2 if the URL is wrong.
+
 Startup prints `Database: PostgreSQL at <host>/<database> (user: ...)` or `Database: H2 in-memory (<name>)` or `Database: H2 file-based (<name>)`.
 
 `RAILWAY_ENVIRONMENT` or `DB_REQUIRE_POSTGRES=true` refuses to start unless PostgreSQL configuration is present. `DB_POOL_SIZE` is the Hikari maximum pool size (default 10, must be a positive integer).
 
 `ADMIN_TOKEN` is the bearer token for adjustment routes. If it is unset, those routes return 401 and the rest of the API still starts. `ADMIN_PASSWORD` is the HTTP Basic password for interest routes; the username is `admin`. If it is unset or empty, interest routes return 503.
 
+Neither credential is baked into a UI build. The admin console asks for the admin password on the interest-rate page and keeps it only in memory while that page is open; it is never written to `localStorage` or `sessionStorage`. The adjustment routes are called with the bearer token directly, as in the examples below.
+
 `BILLER_URL` selects the HTTP biller. `BILLER_TIMEOUT_MS` is the HTTP client timeout (default 5000). `BILLER_PORT` (default 8090) and `BILLER_LATENCY_MS` (default 0) apply to `sbt runBiller` only.
 
 Flyway applies `src/main/resources/db/migration/V1__initial_schema.sql` and `V2__interest_credit_periods.sql` before the pool opens.
+
+`V1__initial_schema.sql` was edited when PostgreSQL support and the interest tables were merged. Flyway validates checksums, so an H2 file database created from the earlier V1 fails at startup with a checksum mismatch. Delete the old `.mv.db` file named in `DB_URL` and start again; the schema is recreated from V1 and V2.
 
 ## API
 

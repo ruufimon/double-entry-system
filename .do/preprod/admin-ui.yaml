@@ -1,0 +1,25 @@
+# App Platform spec for the pre-production admin console.
+# Each UI is built with <base href="/"> and needs its own domain, so it is a
+# separate app. Private networking only spans one app, so nginx proxies /api/*
+# to the API's public URL.
+#
+# Apply changes with: doctl apps update <app-id> --spec .do/preprod/admin-ui.yaml
+name: banking-preprod-admin-ui
+region: sgp
+services:
+  - name: web
+    image:
+      registry_type: DOCR
+      repository: banking-admin-ui
+      tag: preprod
+      deploy_on_push:
+        enabled: true
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    routes:
+      - path: /
+    envs:
+      - key: API_URL
+        scope: RUN_TIME
+        value: API_PUBLIC_URL

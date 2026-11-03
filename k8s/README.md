@@ -70,6 +70,21 @@ deployed by `Deploy to production`, from `main` only, after an approval in the
 `production` environment, with its own namespace-scoped `KUBE_CONFIG`. Pushes to the
 `k8s` branch deploy only to pre-production.
 
+## Nightly shutdown
+
+The `Cluster schedule` workflow turns the whole cluster off from 22:00 to 06:00
+(Asia/Bangkok), production included, by scaling the node pool to zero. Overnight,
+every URL fails, and DigitalOcean's managed components in the cluster stop too.
+In the morning the same pods start again on their own, and the workflow waits
+until production answers. A missed midnight interest run is caught up when the
+API starts. A bill payment in progress at 22:00 is lost (#8). It saves about
+$16/month of node cost; the load balancer and databases bill all the time.
+
+It needs the `DIGITALOCEAN_K8S_TOKEN` secret, and runs on schedule only while
+the repository variable `CLUSTER_SCHEDULE` is `true`. Run it by hand from the
+Actions tab (action `off` or `on`) at any time, for example to bring the cluster
+up early.
+
 ## Rollback
 
 Normally, re-run the deploy job of an earlier commit, or `kubectl apply -k` with

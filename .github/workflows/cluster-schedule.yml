@@ -1,0 +1,87 @@
+# Turns the banking-k8s cluster off overnight to save node costs, production included:
+# 22:00-06:00 Asia/Bangkok, every day. "Off" scales the only node pool to zero (autoscaling
+# limits 0-0), so every pod stays pending until morning. DigitalOcean's managed components in
+# the cluster are unavailable too. "On" restores 2 nodes (autoscaling 2-3), and the same
+# pods start again on their own.
+#
+# GitHub may start scheduled runs 10-30 minutes late, and disables schedules in public repos
+# after 60 days without activity. The load balancer and databases bill around the clock.
+#
+# Needs the secret DIGITALOCEAN_K8S_TOKEN (a DigitalOcean token with Kubernetes read and
+# update scope). Scheduled runs happen only when the repository variable CLUSTER_SCHEDULE is
+# "true"; run it by hand from the Actions tab with action off or on at any time.
+name: Cluster schedule
+
+on:
+  schedule:
+    - cron: "0 15 * * *"   # 22:00 Asia/Bangkok: off
+    - cron: "0 23 * * *"   # 06:00 Asia/Bangkok: on
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Turn the cluster off or on
+        required: true
+        type: choice
+        options: ["off", "on"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cluster-schedule
+  cancel-in-progress: false
+
+env:
+  CLUSTER: banking-k8s
+  POOL: pool-1
+
+jobs:
+  power:
+    if: github.event_name == 'workflow_dispatch' || vars.CLUSTER_SCHEDULE == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Decide
+      id: decide
+      env:
+        EVENT: ${{ github.event_name }}
+        INPUT: ${{ inputs.action }}
+        SCHEDULE: ${{ github.event.schedule }}
+      run: |
+        if [ "$EVENT" = workflow_dispatch ]; then action="$INPUT"
+        elif [ "$SCHEDULE" = "0 15 * * *" ]; then action=off
+        else action=on; fi
+        echo "action=$action" >> "$GITHUB_OUTPUT"
+        echo "Turning the cluster $action"
+    - name: Install doctl
+      uses: digitalocean/action-doctl@v2
+      with:
+        token: ${{ secrets.DIGITALOCEAN_K8S_TOKEN }}
+    - name: Turn off
+      if: steps.decide.outputs.action == 'off'
+      run: |
+        doctl kubernetes cluster node-pool update "$CLUSTER" "$POOL" \
+          --count 0 --auto-scale --min-nodes 0 --max-nodes 0
+    - name: Turn on
+      if: steps.decide.outputs.action == 'on'
+      run: |
+        doctl kubernetes cluster node-pool update "$CLUSTER" "$POOL" \
+          --count 2 --auto-scale --min-nodes 2 --max-nodes 3
+        for attempt in $(seq 1 60); do
+          running=$(doctl kubernetes cluster node-pool get "$CLUSTER" "$POOL" -o json \
+            | jq '[.[0].nodes[]? | select(.status.state == "running")] | length')
+          echo "running nodes: $running"
+          [ "$running" -ge 2 ] && exit 0
+          sleep 15
+        done
+        echo "Nodes did not come up within 15 minutes" >&2
+        exit 1
+    # Pods need a few minutes after the nodes to pull images and pass their probes.
+    - name: Check production is serving
+      if: steps.decide.outputs.action == 'on'
+      env:
+        PROD_URL: ${{ vars.K8S_PROD_URL }}
+      run: |
+        curl -fsS --retry 40 --retry-delay 15 --retry-all-errors "$PROD_URL/api/ping"
+        echo

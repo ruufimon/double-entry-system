@@ -1,438 +1,421 @@
-# Double-Entry Banking System
+# Double-Entry Banking API
 
-A small full-stack banking application built with Scala, Scalatra, and Angular.
-It demonstrates account deposits, withdrawals, atomic transfers, and event-driven bill payments
-backed by an immutable double-entry ledger.
+Scala 3 / Scalatra HTTP API for customer accounts. Balances are the sum of immutable double-entry ledger rows in H2 or PostgreSQL. The process also runs bill payments, admin balance adjustments, and monthly interest.
 
-This project is an educational implementation. The backend uses H2 and defaults
-to an in-memory database; set `DB_URL` to an H2 file URL to persist accounts,
-ledger entries, rate settings, and interest processing state across restarts.
+Stack from `build.sbt` and `project/build.properties`: Scala 3.3.8, Scalatra 3.2.1, Jetty 12.1.13, Cats 2.13.0, json4s 4.1.1, sbt 2.0.9. CI uses JDK 21.
 
-## Features
+On startup the API opens `acc123` and `acc456` if they are missing and posts a THB 100.00 deposit for each. The deposit id is a name-based UUID of `demo-account-opening:<accountId>`. A repeat of that id is ignored, so a restart does not credit the THB 100.00 again.
 
-- Seeded demo accounts `acc123` and `acc456`, each starting at THB 100.00
-- Deposits and withdrawals with amount and balance validation
-- Atomic transfers between existing accounts
-- Immutable, balanced debit and credit ledger entries
-- Account balances derived from ledger transactions
-- Customer-facing account activity history
-- Admin-configurable annual interest rates with monthly ledger credits
-- Two-step bill payment inquiry and confirmation
-- Internal message bus for account charging, settlement, reversal, and auditing
-- Cats-powered validation, non-empty ledger entries, and immutable balance transitions
-- Angular account dashboard and operation flows
-- Standalone Angular admin console for account operations and interest settings
-- Scala unit and HTTP tests, Angular unit tests, and Playwright E2E coverage
+## Ledger rules
 
-## Architecture
+Every posted transaction is append-only. `LedgerTransaction.create` rejects a transaction unless all of the following hold:
 
-Business operations use intent-oriented names such as `deposit`, `withdraw`,
-`transfer`, and `bill payment`. The ledger translates those operations into balanced debit and
-credit entries. It is the source of truth for account balances; completed
-transactions are never edited, and corrections are represented by reversal
-transactions.
+- At least two entries, and debits equal credits.
+- Every entry is THB.
+- A transfer has exactly two entries, both customer accounts, and the accounts differ.
+- Any other operation has exactly one customer entry.
+- An interest credit is a customer credit paired with an `InterestExpense` debit.
+- An adjustment includes the `Adjustments` account. Only an adjustment may set `adjustsTransactionId`.
+- A bill-payment reversal references the original transaction. Only a reversal may set that reference. `reverses_transaction_id` is unique.
 
-Bill payment is asynchronous after confirmation. The bill-payment domain emits
-an account-charge request to the internal message bus, the banking domain posts
-the ledger transaction, and the payment process then settles with the biller.
-Failed settlement creates an inverse ledger transaction.
+Customer balance is `SUM(credits) - SUM(debits)` on that account's ledger entries. The `accounts` table stores the id and open time only. A debit that would make the balance negative is rejected and nothing is inserted.
 
-See [spec/LedgerFlow.md](spec/LedgerFlow.md) for the detailed flow diagram.
+| Operation | Customer entry | Other entry |
+| --- | --- | --- |
+| Deposit | Credit | Debit `Cash` |
+| Withdrawal | Debit | Credit `Cash` |
+| Transfer | Debit source, credit destination | none |
+| Bill payment | Debit | Credit `BillerClearing` |
+| Bill-payment reversal | Opposite of the original entries | Opposite of the original entries |
+| Interest credit | Credit | Debit `InterestExpense` |
+| Adjustment credit | Credit | Debit `Adjustments` |
+| Adjustment debit | Debit | Credit `Adjustments` |
 
-## Technology
+Activity is ordered by `occurred_at`, then `sequence_no`. `balanceAfter` is the running customer balance. `GET /accounts/:accountId/overview` reads the balance and that activity list on one connection.
 
-- Scala 3.3.8
-- Cats 2.13.0
-- Scalatra 3.2.1 and Jetty 12
-- sbt 2.0.9
-- Angular 22
-- Vitest and ScalaTest
-- Playwright with Chromium
+An activity's `status` is `reversed` when some transaction's `reverses_transaction_id` points at it, and `posted` otherwise. An adjustment does not change that status. `originalTransactionId` is that activity's `reverses_transaction_id`, or its `adjusts_transaction_id` when it is not a reversal. The field is omitted when both are absent.
 
-## Prerequisites
+### Idempotency
 
-- JDK 17 or newer
-- sbt
-- Node.js 22 or newer (runs the Angular CLI)
-- [Bun](https://bun.sh) (installs UI dependencies and runs UI scripts)
+`PUT /accounts/:accountId` inserts the account row. A second call for the same id returns HTTP 200 and does not insert another row. The response `balance` is always `0` on this route, including when the account already has ledger activity. Read `/balance` or `/overview` for the ledger balance.
 
-## Run Locally
+Deposits, withdrawals, and transfers each allocate a new random UUID and post a new transaction. Repeating the HTTP call posts again. Those routes do not read an idempotency key.
 
-Start the backend from the repository root:
+The ledger rejects a second insert of the same `transaction_id` with `duplicate_ledger_transaction`.
 
-```bash
-ADMIN_PASSWORD=choose-a-local-password sbt run
-```
+Admin adjustments require `Idempotency-Key` to be a canonical lowercase UUID. That UUID is the ledger transaction id. Sending the same key again returns HTTP 409 `duplicate_ledger_transaction` and does not return the original 201 body.
 
-The API listens on `http://localhost:8080`. Set the `PORT` environment variable
-to use a different backend port. Rate settings use HTTP Basic authentication
-with the fixed `admin` username. The admin UI keeps the password in memory for
-the current page session. Use HTTPS outside local development.
+A bill-payment charge uses the payment id as its ledger transaction id. The in-process handler keeps the first outcome for that id and does not post it twice in the same process. A reversal id is a name-based UUID of `bill-payment-reversal:<paymentId>`. A second reversal of the same original returns `ledger_transaction_already_reversed`.
 
-### Database Configuration
+Monthly interest uses a name-based UUID of `monthly-interest:<accountId>:<yyyy-MM>`. `interest_credit_periods` has one row per account and month, so a completed month is credited at most once.
 
-By default, the API uses an in-memory H2 database that resets on restart. To use PostgreSQL or persist H2 data across restarts, set these environment variables:
+### Transfers
 
-**PostgreSQL (Railway reference variables):**
-```bash
-PGHOST=localhost
-PGPORT=5432
-PGDATABASE=banking
-PGUSER=postgres
-PGPASSWORD=your_password
-ADMIN_PASSWORD=choose-a-local-password sbt run
-```
+Both accounts must already exist and must differ. The debit and credit are one ledger transaction in one database transaction. The two account rows are locked in account-id order. If the source balance is too small, the destination is unchanged.
 
-**PostgreSQL (DATABASE_URL format):**
-```bash
-DATABASE_URL=postgresql://user:password@localhost:5432/banking
-ADMIN_PASSWORD=choose-a-local-password sbt run
-```
+Customer activity uses the same transaction id on both accounts: `transfer_out` on the source and `transfer_in` on the destination. `counterpartyAccountId` is the other account.
 
-**H2 file-based (persists across restarts):**
-```bash
-DB_URL=/path/to/banking
-ADMIN_PASSWORD=choose-a-local-password sbt run
-```
+### Bill payments and reversals
 
-When PostgreSQL environment variables are set, the app uses PostgreSQL. Otherwise, it falls back to H2 (in-memory by default, or file-based if `DB_URL` is set).
+There is no public reverse endpoint. Reversals are posted only when bill-payment settlement fails.
 
-**Railway Protection:** On Railway (when `RAILWAY_ENVIRONMENT` is set), PostgreSQL is required. The API will fail fast at startup if PostgreSQL configuration is missing, preventing silent fallback to H2 which would lose data on restart.
+Inquiry does not move money and does not require the account to exist. The quote expires five minutes after it is stored. Confirm is accepted only for the account that inquired, and only while the inquiry is pending and unexpired. Confirm returns HTTP 202 with `awaiting_account_charge` and publishes a charge on an in-process single-thread bus. Poll `GET .../bill-payments/:paymentId` for the later status.
 
-**Require PostgreSQL:** Set `DB_REQUIRE_POSTGRES=true` to enforce PostgreSQL in any environment. The API will refuse to start with H2 when this flag is set.
+The charge debits the customer and credits `BillerClearing`. If the account is missing or the balance is too small, the payment becomes `failed`, no ledger row is written, and the inquiry returns to pending so it can be confirmed again until it expires.
 
-**Connection pool:** `DB_POOL_SIZE` sets how many database connections each API process may hold (default 10). Every process that can run at once must fit in the database's connection limit, including the extra process during a rolling update.
+After a successful charge the process settles with the biller. Success stores a receipt and completes the inquiry. Settlement failure posts the inverse ledger transaction, marks the original activity `reversed`, sets the payment to `failed`, and releases the inquiry. If that reversal cannot be posted, the status is `manual_review`.
 
-The API logs the selected database at startup: `Database: PostgreSQL at host/db (user: ...)` or `Database: H2 in-memory (banking-uuid)`.
+Payment `status` values: `awaiting_account_charge`, `settling`, `reversing`, `completed`, `failed`, `manual_review`.
 
-In another terminal, install and start the Angular application:
+With no `BILLER_URL`, the API uses an in-process biller with one unpaid bill: biller `demo-biller`, reference 1 `customer-001`, reference 2 `invoice-001`, debt THB 100.00. That bill can be paid once per process. `sbt runBiller` starts a separate HTTP biller on port 8090 (`BILLER_PORT`) with the same `invoice-001` bill plus `invoice-002` (25.00), `invoice-decline` (40.00), `invoice-error` (40.00), `invoice-timeout` (40.00), and `invoice-slow` (60.00, 3 second delay). Point the API at it with `BILLER_URL`.
+
+### Interest and adjustments
+
+The interest clock is `Asia/Bangkok`. If `interest_rate_history` is empty, startup inserts a 0% annual rate effective on the first day of the current Bangkok month, recorded as `System default`.
+
+`PUT /admin/interest-rate` appends a rate that becomes effective on the first day of next month. It does not change the current month. A rate is zero or positive and has at most two decimal places.
+
+A scheduler runs at startup and then once a day at the next Bangkok midnight. It posts interest for each completed month not yet processed. For each account, the amount is the sum of that month's positive daily closing balances, times the annual percent, divided by 100 and by 365 (366 in a leap year), rounded half up to two decimal places. A result of zero or less is not posted.
+
+An adjustment is a new balanced transaction against `Adjustments`. Optional `adjustsTransactionId` must be an existing transaction that includes this customer account. The original transaction stays in place.
+
+Completed deposits, withdrawals, transfers (both accounts), successful bill payments, and adjustments are appended to `audit_log`. There is no HTTP route for that log.
+
+## Build, run, and test
+
+JDK 21 and sbt 2.0.9. From the repository root:
 
 ```bash
-cd ui
-bun install
-bun run start
+sbt compile
+sbt test
+sbt run
 ```
 
-Open `http://localhost:4200`. During development, Angular proxies requests under
-`/api` to the backend on port 8080.
+In sbt 2, `sbt test` runs the ScalaTest tests that have not passed yet or whose dependencies changed. `sbt testFull` runs every test. The suite includes PostgreSQL tests that start a `postgres:17-alpine` Testcontainers container, so those tests need a running Docker daemon.
 
-Run the independent admin console in a third terminal:
+`sbt run` listens on `http://localhost:8080` unless `PORT` is set. `sbt runBiller` starts the fake HTTP biller.
+
+## Configuration
+
+PostgreSQL is selected when `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD` are all set and `PGPORT` is an integer. Otherwise a `DATABASE_URL` of `postgresql://` or `postgres://` with a user, a password, a host, and a database name is used. Its query string is copied into the JDBC URL. A missing port becomes 5432. `PG*` wins over `DATABASE_URL`. An incomplete `PG*` set falls through to `DATABASE_URL`.
+
+If neither is usable, the API uses H2. `DB_URL` is the JDBC URL as given, not a filesystem path. User and password default to `banking` / `banking` (`DB_USER`, `DB_PASSWORD`). When `DB_URL` is unset the URL is `jdbc:h2:mem:banking-<uuid>;DB_CLOSE_DELAY=-1`, which is empty after restart.
 
 ```bash
-cd admin-ui
-bun install
-bun run start --host localhost --port 4300
+# PostgreSQL from discrete variables
+PGHOST=localhost PGPORT=5432 PGDATABASE=banking PGUSER=postgres PGPASSWORD=secret sbt run
+
+# PostgreSQL from a URL
+DATABASE_URL=postgresql://user:password@localhost:5432/banking sbt run
+
+# H2 file
+DB_URL='jdbc:h2:file:/path/to/banking;DB_CLOSE_DELAY=-1' sbt run
 ```
 
-Open `http://localhost:4300`. Account browsing remains part of the demo
-console; the interest-rate settings page requires the configured admin password.
+Startup prints `Database: PostgreSQL at <host>/<database> (user: ...)` or `Database: H2 in-memory (<name>)` or `Database: H2 file-based (<name>)`.
+
+`RAILWAY_ENVIRONMENT` or `DB_REQUIRE_POSTGRES=true` refuses to start unless PostgreSQL configuration is present. `DB_POOL_SIZE` is the Hikari maximum pool size (default 10, must be a positive integer).
+
+`ADMIN_TOKEN` is the bearer token for adjustment routes. If it is unset, those routes return 401 and the rest of the API still starts. `ADMIN_PASSWORD` is the HTTP Basic password for interest routes; the username is `admin`. If it is unset or empty, interest routes return 503.
+
+`BILLER_URL` selects the HTTP biller. `BILLER_TIMEOUT_MS` is the HTTP client timeout (default 5000). `BILLER_PORT` (default 8090) and `BILLER_LATENCY_MS` (default 0) apply to `sbt runBiller` only.
+
+Flyway applies `src/main/resources/db/migration/V1__initial_schema.sql` and `V2__interest_credit_periods.sql` before the pool opens.
 
 ## API
 
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `GET` | `/ping` | Backend health check |
-| `PUT` | `/accounts/:accountId` | Create an account, or return the existing account |
-| `GET` | `/accounts/:accountId/overview` | Get one consistent balance and activity snapshot |
-| `GET` | `/accounts/:accountId/balance` | Get the ledger-derived balance |
-| `GET` | `/accounts/:accountId/activities` | List customer-facing ledger activity |
-| `POST` | `/accounts/:accountId/deposits` | Deposit funds |
-| `POST` | `/accounts/:accountId/withdrawals` | Withdraw funds |
-| `POST` | `/accounts/:accountId/transfers` | Transfer funds to another account |
-| `POST` | `/accounts/:accountId/bill-payments/inquiries` | Retrieve the current bill debt |
-| `POST` | `/accounts/:accountId/bill-payments/:inquiryId/confirm` | Start payment processing |
-| `GET` | `/accounts/:accountId/bill-payments/:paymentId` | Read payment status |
-| `GET` | `/admin/accounts` | List operational summaries for every account |
-| `GET` | `/admin/accounts/:accountId` | Read complete operational account activity |
-| `GET` | `/admin/interest-rate` | Read current and scheduled rates and rate history (HTTP Basic admin auth) |
-| `PUT` | `/admin/interest-rate` | Schedule a global annual rate for next month (HTTP Basic admin auth) |
+JSON routes use `Content-Type: application/json`. Error bodies are `{"error":"<code>","message":"<text>"}`. An inquiry that fails validation also returns `details`, a list of `{error, message}`. Unknown paths return `{"error":"not_found","message":"No such route"}`. Unhandled failures return `{"error":"internal_error","message":"An unexpected error occurred"}`.
 
-Account IDs may contain 1–64 letters, numbers, underscores, or hyphens. Monetary
-amounts must be positive and have no more than two decimal places.
+Account ids are 1–64 characters from `[A-Za-z0-9_-]`, after trimming. Money amounts are greater than zero and have at most two decimal places. Currency is THB.
 
-On startup, the API creates the demo accounts if needed and posts their initial
-THB 100.00 balances as ledger deposits. The customer UI home page lets users
-choose between these accounts. The account creation endpoint remains available
-for API use and test setup.
+| Method | Path | Success | Auth |
+| --- | --- | --- | --- |
+| `GET` | `/ping` | 200 `text/plain` `pong` | none |
+| `PUT` | `/accounts/:accountId` | 201 created, 200 already open | none |
+| `GET` | `/accounts/:accountId/overview` | 200 | none |
+| `GET` | `/accounts/:accountId/balance` | 200 | none |
+| `GET` | `/accounts/:accountId/activities` | 200 | none |
+| `POST` | `/accounts/:accountId/deposits` | 200 | none |
+| `POST` | `/accounts/:accountId/withdrawals` | 200 | none |
+| `POST` | `/accounts/:accountId/transfers` | 200 | none |
+| `POST` | `/accounts/:accountId/bill-payments/inquiries` | 200 | none |
+| `POST` | `/accounts/:accountId/bill-payments/:inquiryId/confirm` | 202 | none |
+| `GET` | `/accounts/:accountId/bill-payments/:paymentId` | 200 | none |
+| `GET` | `/admin/accounts` | 200 | none |
+| `GET` | `/admin/accounts/:accountId` | 200 | none |
+| `POST` | `/admin/accounts/:accountId/adjustments` | 201 | bearer `ADMIN_TOKEN` |
+| `GET` | `/admin/accounts/:accountId/adjustments` | 200 | bearer `ADMIN_TOKEN` |
+| `GET` | `/admin/interest-rate` | 200 | Basic `admin` / `ADMIN_PASSWORD` |
+| `PUT` | `/admin/interest-rate` | 200 | Basic `admin` / `ADMIN_PASSWORD` |
 
-### Account example
+Frequent error statuses: 400 invalid input, 401 admin auth, 404 missing account, bill, inquiry, payment, or adjusted transaction, 409 insufficient funds, duplicate ledger id, transaction already reversed, bill already paid, or inquiry in progress or completed, 410 expired inquiry, 503 interest admin password not configured. A bill-payment charge failure is reported on the payment resource as `failed`, not as the confirm response.
+
+### Accounts, deposits, withdrawals
 
 ```bash
 curl -X PUT http://localhost:8080/accounts/account-123 \
   -H 'Content-Type: application/json' \
   -d '{}'
+```
 
+```json
+{"accountId":"account-123","currency":"THB","balance":0,"status":"active"}
+```
+
+```bash
 curl -X POST http://localhost:8080/accounts/account-123/deposits \
   -H 'Content-Type: application/json' \
   -d '{"amount":200.00}'
+```
 
+```json
+{"accountId":"account-123","balance":200.00}
+```
+
+```bash
 curl -X POST http://localhost:8080/accounts/account-123/withdrawals \
   -H 'Content-Type: application/json' \
   -d '{"amount":25.00}'
+```
 
+```json
+{"accountId":"account-123","balance":175.00}
+```
+
+```bash
 curl http://localhost:8080/accounts/account-123/balance
+```
+
+```json
+{"accountId":"account-123","currency":"THB","balance":175.00}
+```
+
+```bash
 curl http://localhost:8080/accounts/account-123/activities
 ```
 
-### Transfer example
+```json
+[
+  {
+    "transactionId":"0f0c6b2e-7c2a-4e0a-9a1e-6b5d0a9c1f10",
+    "operation":"deposit",
+    "effect":"increase",
+    "amount":200.00,
+    "currency":"THB",
+    "balanceAfter":200.00,
+    "occurredAt":"2026-11-03T13:00:00Z",
+    "status":"posted"
+  },
+  {
+    "transactionId":"6a1d0c44-1b2e-4f7a-8c90-2d5e7b1a3c11",
+    "operation":"withdrawal",
+    "effect":"decrease",
+    "amount":25.00,
+    "currency":"THB",
+    "balanceAfter":175.00,
+    "occurredAt":"2026-11-03T13:01:00Z",
+    "status":"posted"
+  }
+]
+```
 
-Both accounts must already exist. A transfer debits the source and credits the
-destination in one ledger transaction:
+`GET /accounts/:accountId/overview` returns `accountId`, `currency`, `balance`, and the same `activities` array. Transaction ids and timestamps above are examples; the server generates them.
+
+A zero or negative amount, or more than two decimal places, returns 400, for example `{"error":"invalid_deposit_amount","message":"Amount must be greater than zero"}`. An unknown account returns 404 `account_not_found`. A withdrawal larger than the balance returns 409:
+
+```json
+{"error":"insufficient_funds","message":"Available balance is 10.00; requested amount is 10.01"}
+```
+
+`operation` in activity is `deposit`, `withdrawal`, `transfer_out`, `transfer_in`, `bill_payment`, `bill_payment_reversal`, `interest_credit`, or `adjustment`. `effect` is `increase` or `decrease`. Absent optional fields are omitted: `originalTransactionId` is set on a reversal or an adjustment that names a transaction, and `counterpartyAccountId` is set on transfers.
+
+### Transfers
 
 ```bash
 curl -X PUT http://localhost:8080/accounts/recipient-123 \
-  -H 'Content-Type: application/json' \
-  -d '{}'
+  -H 'Content-Type: application/json' -d '{}'
 
 curl -X POST http://localhost:8080/accounts/account-123/transfers \
   -H 'Content-Type: application/json' \
   -d '{"destinationAccountId":"recipient-123","amount":25.50}'
 ```
 
-The shared transfer ID appears as `transfer_out` activity on the source and
-`transfer_in` activity on the destination, with the other account identified as
-the counterparty.
-
-### Bill-payment example
-
-The in-memory demo biller exposes one bill:
-
-- Biller code: `demo-biller`
-- Reference code 1: `customer-001`
-- Reference code 2: `invoice-001`
-- Debt: THB 100.00
-
-Fund the account with at least THB 100, then inquire:
-
-```bash
-curl -X POST \
-  http://localhost:8080/accounts/account-123/bill-payments/inquiries \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "billerCode":"demo-biller",
-    "referenceCode1":"customer-001",
-    "referenceCode2":"invoice-001"
-  }'
+```json
+{
+  "transferId":"b7e1c0a2-4d55-4a1e-9f20-1c2b3d4e5f60",
+  "sourceAccountId":"account-123",
+  "destinationAccountId":"recipient-123",
+  "amount":25.50,
+  "currency":"THB",
+  "sourceBalance":149.50,
+  "occurredAt":"2026-11-03T13:02:00Z"
+}
 ```
 
-Use the returned `inquiryId` to confirm the payment. Confirmation returns HTTP
-202 and a `paymentId`:
+The same account on both sides returns 400 `same_account_transfer`. A missing destination returns 404 `account_not_found`.
+
+### Bill payments
+
+The completed example below continues from the transfer: the source balance is 149.50, and paying 100.00 leaves 49.50.
+
+```bash
+curl -X POST http://localhost:8080/accounts/account-123/bill-payments/inquiries \
+  -H 'Content-Type: application/json' \
+  -d '{"billerCode":"demo-biller","referenceCode1":"customer-001","referenceCode2":"invoice-001"}'
+```
+
+```json
+{
+  "inquiryId":"3d1c2b4a-5e6f-4708-91ab-0c1d2e3f4a5b",
+  "billerCode":"demo-biller",
+  "referenceCode1":"customer-001",
+  "referenceCode2":"invoice-001",
+  "currentDebt":100.00,
+  "expiresAt":"2026-11-03T13:07:00Z"
+}
+```
 
 ```bash
 curl -X POST \
-  http://localhost:8080/accounts/account-123/bill-payments/INQUIRY_ID/confirm \
+  http://localhost:8080/accounts/account-123/bill-payments/3d1c2b4a-5e6f-4708-91ab-0c1d2e3f4a5b/confirm \
   -H 'Content-Type: application/json' \
   -d '{}'
-
-curl \
-  http://localhost:8080/accounts/account-123/bill-payments/PAYMENT_ID
 ```
 
-## Tests
-
-Run the backend test suite:
+```json
+{
+  "paymentId":"9a8b7c6d-5e4f-4321-80ab-cdef12345678",
+  "inquiryId":"3d1c2b4a-5e6f-4708-91ab-0c1d2e3f4a5b",
+  "accountId":"account-123",
+  "status":"awaiting_account_charge"
+}
+```
 
 ```bash
-sbt test
+curl http://localhost:8080/accounts/account-123/bill-payments/9a8b7c6d-5e4f-4321-80ab-cdef12345678
 ```
 
-Run Angular unit tests and a production build:
+```json
+{
+  "paymentId":"9a8b7c6d-5e4f-4321-80ab-cdef12345678",
+  "inquiryId":"3d1c2b4a-5e6f-4708-91ab-0c1d2e3f4a5b",
+  "accountId":"account-123",
+  "billerCode":"demo-biller",
+  "amount":100.00,
+  "currency":"THB",
+  "status":"completed",
+  "resultingBalance":49.50,
+  "billerReceiptCode":"demo-biller-9a8b7c6d-5e4f-4321-80ab-cdef12345678",
+  "paidAt":"2026-11-03T13:02:01Z"
+}
+```
+
+`resultingBalance`, `billerReceiptCode`, `paidAt`, and `failure` are omitted until the process sets them. On failure, `failure` is `{"error":"<code>","message":"<text>"}`. The in-process receipt code is `<billerCode>-<paymentId>`.
+
+Unknown bill references return 404 `bill_not_found`. An unknown biller returns 404 `biller_not_found`. A paid bill returns 409 `bill_not_payable` from inquiry. Confirming a missing, expired, in-progress, or completed inquiry returns 404 `bill_payment_inquiry_not_found`, 410 `bill_payment_inquiry_expired`, 409 `bill_payment_in_progress`, or 409 `bill_payment_already_completed`. Invalid inquiry fields return 400 `invalid_bill_payment_inquiry` with one `details` entry per field.
+
+### Admin
+
+`GET /admin/accounts` returns every account, ordered by id:
+
+```json
+{
+  "accountId":"acc123",
+  "currency":"THB",
+  "status":"active",
+  "balance":100.00,
+  "activityCount":1,
+  "lastActivityAt":"2026-11-03T13:00:00Z"
+}
+```
+
+`GET /admin/accounts/:accountId` adds `activities` in the customer activity shape. `status` in this payload is the string `active`.
+
+Adjustments need `Authorization: Bearer <ADMIN_TOKEN>`, `X-Admin-Actor` (1–128 characters), and `Idempotency-Key` (canonical lowercase UUID). `reason` is required and at most 500 characters. `direction` is `credit` or `debit`. The body below is a debit of 2.50 after the bill payment, so the balance goes from 49.50 to 47.00.
 
 ```bash
-cd ui
-bun run test
-bun run build
+curl -X POST http://localhost:8080/admin/accounts/account-123/adjustments \
+  -H 'Authorization: Bearer <ADMIN_TOKEN>' \
+  -H 'X-Admin-Actor: ops-alice' \
+  -H 'Idempotency-Key: 11111111-1111-4111-8111-111111111111' \
+  -H 'Content-Type: application/json' \
+  -d '{"direction":"debit","amount":2.50,"reason":"Fee correction","adjustsTransactionId":"0f0c6b2e-7c2a-4e0a-9a1e-6b5d0a9c1f10"}'
 ```
 
-Run the same checks for the standalone admin application:
+```json
+{
+  "adjustmentId":"11111111-1111-4111-8111-111111111111",
+  "accountId":"account-123",
+  "direction":"debit",
+  "amount":2.50,
+  "currency":"THB",
+  "reason":"Fee correction",
+  "actor":"ops-alice",
+  "adjustsTransactionId":"0f0c6b2e-7c2a-4e0a-9a1e-6b5d0a9c1f10",
+  "balanceAfter":47.00,
+  "occurredAt":"2026-11-03T13:03:00Z"
+}
+```
+
+`GET /admin/accounts/:accountId/adjustments` returns the same objects. `adjustsTransactionId` is omitted when the request omits it. A missing bearer token returns 401 `unauthorized`. A missing actor returns 400 `missing_admin_actor`. A non-UUID key returns 400 `invalid_idempotency_key`.
+
+Interest routes use Basic auth. A missing password configuration returns 503 `admin_auth_not_configured`. A wrong password returns 401 `admin_auth_required` and `WWW-Authenticate: Basic realm="Ledger Admin"`.
 
 ```bash
-cd admin-ui
-bun run test
-bun run build
-bun run e2e
+curl -u admin:<ADMIN_PASSWORD> http://localhost:8080/admin/interest-rate
+
+curl -X PUT http://localhost:8080/admin/interest-rate \
+  -u admin:<ADMIN_PASSWORD> \
+  -H 'Content-Type: application/json' \
+  -d '{"rate":3.65}'
 ```
 
-Use `bun run test`, not `bun test`: the latter runs Bun's own test runner
-instead of the Angular (Vitest) tests.
-
-Install Playwright's Chromium binary once, then run the full-stack E2E test:
-
-```bash
-cd ui
-bunx playwright install chromium
-bun run e2e
+```json
+{
+  "currentRate":0.00,
+  "currentEffectiveFrom":"2026-11-01",
+  "nextEffectiveFrom":"2026-12-01",
+  "scheduledRate":3.65,
+  "scheduledEffectiveFrom":"2026-12-01",
+  "history":[
+    {
+      "rate":3.65,
+      "effectiveFrom":"2026-12-01",
+      "createdAt":"2026-11-03T13:04:00Z",
+      "updatedBy":"admin",
+      "status":"scheduled"
+    },
+    {
+      "rate":0.00,
+      "effectiveFrom":"2026-11-01",
+      "createdAt":"2026-11-03T13:00:00Z",
+      "updatedBy":"System default",
+      "status":"current"
+    }
+  ]
+}
 ```
 
-Playwright starts the backend and frontend automatically when they are not
-already running.
+`history` is newest first. `status` is `current`, `scheduled`, or `superseded`. Before any `PUT`, `scheduledRate` and `scheduledEffectiveFrom` are omitted and history contains only the default row. The dates above are for a change made in November 2026: `currentEffectiveFrom` is the first of the current Bangkok month, and a `PUT` schedules the first of the next month.
 
-To verify a deployed Railway environment, open **Actions → Staging E2E → Run
-workflow** and enter the public customer and admin UI URLs. The workflow sends
-all API traffic through each deployed UI's `/api` proxy and creates temporary
-in-memory test accounts in staging. It skips the single-use demo bill tests by
-default so repeated checks remain reliable. Enable **include_bill_payment**
-only immediately after restarting or redeploying the staging API.
-
-The same deployed-URL mode is available locally:
-
-```bash
-cd ui
-E2E_BASE_URL=https://customer-staging.example.com bun run e2e
-```
-
-## Deploy
-
-The repository includes a [Render Blueprint](render.yaml) with three services:
-
-- `banking-api`: the Scalatra API, built as a GraalVM native image from
-  [`Dockerfile.native`](Dockerfile.native)
-- `banking-ui`: the Angular build, served as a static site. It rewrites `/api/*`
-  to the API and all other paths to `index.html`.
-- `banking-admin-ui`: the independent read-only admin build with the same API
-  proxy and single-page application rewrites.
-
-To deploy, open the Render dashboard, choose **New → Blueprint**, and select
-this repository. Both services redeploy on every push to `main`. If Render
-assigns the API a URL other than `https://banking-api.onrender.com`, update the
-`/api/*` rewrite in `render.yaml`.
-
-Because all data is held in memory, run the API as a single instance and expect
-every deploy or restart to reset accounts and ledger entries.
-
-### Docker
-
-Run the API and both UIs with Docker Compose. Open the customer application at
-`http://localhost:4200` and the admin console at `http://localhost:4300`:
-
-```bash
-export ADMIN_PASSWORD=choose-a-local-password
-docker compose up --build
-```
-
-Compose requires `ADMIN_PASSWORD` for the protected interest-rate settings.
-You can also put it in an untracked `.env` file beside `docker-compose.yml`.
-
-Compose runs the [native API image](#native-api-image-graalvm). The UI image
-([`Dockerfile.ui`](Dockerfile.ui)) builds the Angular app and serves it with
-nginx on `PORT` (default 8080), proxying `/api/*` to the address in `API_URL`
-(default `http://api:8080`, the Compose service name). nginx resolves that
-address per request, so it starts even when the API is unavailable and answers
-`/api/*` with 502 until the API is reachable. The UI image can also be built and
-run on its own, against an API on the host:
-
-```bash
-docker build -f Dockerfile.ui -t banking-ui .
-docker run --rm -p 4200:8080 -e API_URL=http://host.docker.internal:8080 banking-ui
-```
-
-Build and run the admin image independently in the same way:
-
-```bash
-docker build -f Dockerfile.admin-ui -t banking-admin-ui .
-docker run --rm -p 4300:8080 -e API_URL=http://host.docker.internal:8080 banking-admin-ui
-```
-
-### DigitalOcean
-
-Production and pre-production run on DigitalOcean Kubernetes (DOKS) in `sgp1`,
-one namespace each, with its own managed PostgreSQL 17 database. See
-[`k8s/README.md`](k8s/README.md) for the cluster, manifests and operations.
-
-| Environment | Namespace | Database | Customer UI | Admin UI |
-| --- | --- | --- | --- | --- |
-| Production | `prod` | `banking-prod-db` | https://app.139-59-219-31.sslip.io | https://admin.139-59-219-31.sslip.io |
-| Pre-production | `preprod` | `banking-preprod-db` | https://preprod-ui.139-59-219-31.sslip.io | https://preprod-admin.139-59-219-31.sslip.io |
-
-The hosts are [sslip.io](https://sslip.io) names for the cluster's load balancer
-until there is a real domain. The API connects as the non-admin database user
-`banking_app`, and only the cluster can reach either database.
-
-Until 2026-11-10, the old App Platform UI apps in [`.do/prod`](.do/prod) still
-serve the previous production URLs, by calling the Kubernetes API through the
-temporary host `api.139-59-219-31.sslip.io`. Delete those three apps,
-`k8s/overlays/prod/transition-api.yaml` and `.do/` together after that.
-
-Releases:
-
-1. A push to `main` that passes every CI job pushes each image as `:<sha>`, and
-   `Deploy to Kubernetes pre-prod` rolls that commit out to pre-production.
-2. `Deploy to production` then waits for approval in the `production` GitHub
-   environment. Approving it deploys the same `:<sha>` images to the `prod`
-   namespace, smoke-tests them without writing anything, and rolls back if
-   either step fails. Nothing is rebuilt.
-
-To roll production back, re-run the `Deploy to production` job of an earlier
-commit. In an emergency, `kubectl -n prod rollout undo deployment/api` takes
-seconds.
-
-The `Registry cleanup` workflow deletes commit tags older than 30 days,
-keeping whatever `prod` and `preprod` point at. It needs the
-`DO_REGISTRY_CLEANUP` repository variable set to `true`, and a
-`DIGITALOCEAN_ACCESS_TOKEN` with the registry delete scope.
-
-### Railway
-
-Create three services from this repository and set these variables:
-
-| Service | Variable | Value |
-| --- | --- | --- |
-| API | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.native` |
-| API | `PORT` | `8080` |
-| UI | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.ui` |
-| UI | `API_URL` | `http://${{API.RAILWAY_PRIVATE_DOMAIN}}:8080` |
-| Admin UI | `RAILWAY_DOCKERFILE_PATH` | `Dockerfile.admin-ui` |
-| Admin UI | `API_URL` | `http://${{API.RAILWAY_PRIVATE_DOMAIN}}:8080` |
-
-Replace `API` in the reference variable with the API service's name in Railway.
-Generate public domains for the UI services only; the API stays on Railway's
-private network. If either UI cannot reach the API privately, generate a public
-domain for the API too and set `API_URL` to that `https://` URL instead.
-
-### Native API image (GraalVM)
-
-[`Dockerfile.native`](Dockerfile.native) compiles the API ahead of time with
-GraalVM `native-image` and runs it on a distroless base image. It starts in
-milliseconds and uses roughly a tenth of the memory of the API on the JVM, at
-the cost of a slower build (about 3 minutes, with up to 3 GB of RAM for
-`native-image`). It is the only API image; for development, use `sbt run`.
-
-```bash
-docker build -f Dockerfile.native -t banking-api:native .
-docker run --rm -p 8080:8080 banking-api:native
-```
-
-Native images need to know ahead of time which classes are used through
-reflection, which Jetty, Scalatra, and json4s rely on. That metadata lives in
-`src/main/resources/META-INF/native-image/`. After changing routes, JSON
-models, or dependencies, regenerate it by running the API with the GraalVM
-tracing agent, exercising every route (including error responses), and then
-stopping the container so the agent writes its output:
-
-```bash
-sbt stage
-docker run --rm -p 8080:8080 \
-  -v "$PWD/target/out/jvm/scala-3.3.8/scalatra-ping-api/universal/stage/lib:/app/lib:ro" \
-  -v "$PWD/src/main/resources/META-INF/native-image/com.example/scalatra-ping-api:/config" \
-  --entrypoint java ghcr.io/graalvm/native-image-community:25 \
-  -agentlib:native-image-agent=config-output-dir=/config \
-  -cp '/app/lib/*' com.example.Server
-```
-
-A missing entry usually shows up as an HTTP 500 or a `ClassNotFoundException`
-in the native image but not on the JVM.
-
-## Project Layout
+## Project layout
 
 ```text
-src/main/scala/com/example/banking/      Account, ledger, messaging, and HTTP code
-src/main/scala/com/example/billpayment/  Bill-payment workflow and biller adapter
-src/test/scala/                          Backend tests
-ui/                                     Angular application and Playwright tests
-admin-ui/                               Standalone Angular admin application
-spec/                                   Architecture documentation
+build.sbt
+project/build.properties                         sbt 2.0.9
+src/main/scala/com/example/Server.scala          Jetty entry point
+src/main/scala/com/example/PingServlet.scala
+src/main/scala/com/example/banking/               accounts, ledger, interest, admin HTTP
+src/main/scala/com/example/billpayment/          inquiry, confirm, settlement, reversal
+src/main/scala/com/example/biller/               standalone fake biller
+src/main/scala/com/example/infrastructure/       JDBC URL selection, pool, Flyway
+src/main/resources/db/migration/                 V1 and V2 SQL
+src/test/scala/                                  ScalaTest, including Testcontainers
+spec/                                            extra design notes
+ui/  admin-ui/  ui-elm/                          client applications
+k8s/                                             cluster manifests; see k8s/README.md
 ```
 
 ## License
 
-Licensed under the [GNU General Public License v3.0](LICENSE).
+[GNU General Public License v3.0](LICENSE).

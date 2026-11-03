@@ -11,6 +11,7 @@ on:
       - "main"
       - "cursor/**"
       - "feat/**"
+      - "k8s"
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:

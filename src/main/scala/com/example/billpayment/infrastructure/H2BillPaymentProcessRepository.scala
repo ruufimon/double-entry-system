@@ -90,45 +90,65 @@ final class H2BillPaymentProcessRepository(database: Database) extends BillPayme
       updatedAt = rows.getTimestamp("updated_at").toInstant()
     )
 
+  // H2's MERGE ... KEY is not valid on PostgreSQL, and this form works on both.
+  // Payment ids are new UUIDs and updates hold the row lock, so the two steps cannot race.
   private def upsert(connection: Connection, process: BillPaymentProcess): Unit =
-    val statement = connection.prepareStatement(
+    val update = connection.prepareStatement(
       """
-      MERGE INTO bill_payment_processes
-        (payment_id, inquiry_id, account_id, biller_code, reference_code1, reference_code2,
-         amount, status, resulting_balance, receipt_code, receipt_paid_at,
-         failure_code, failure_message, created_at, updated_at)
-      KEY (payment_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      UPDATE bill_payment_processes
+      SET inquiry_id = ?, account_id = ?, biller_code = ?, reference_code1 = ?, reference_code2 = ?,
+          amount = ?, status = ?, resulting_balance = ?, receipt_code = ?, receipt_paid_at = ?,
+          failure_code = ?, failure_message = ?, created_at = ?, updated_at = ?
+      WHERE payment_id = ?
       """
     )
-    try
-      statement.setString(1, process.paymentId.value.toString)
-      statement.setString(2, process.inquiryId.value.toString)
-      statement.setString(3, process.accountId.value)
-      statement.setString(4, process.debt.billerCode.value)
-      statement.setString(5, process.debt.referenceCode1.value)
-      statement.setString(6, process.debt.referenceCode2.value)
-      statement.setBigDecimal(7, process.debt.amount.amount.bigDecimal)
-      statement.setString(8, process.status.toString)
-      setNullableDecimal(statement, 9, process.resultingBalance)
-      process.billerReceipt match
-        case Some(receipt) =>
-          statement.setString(10, receipt.receiptCode)
-          statement.setTimestamp(11, java.sql.Timestamp.from(receipt.paidAt))
-        case None =>
-          statement.setString(10, null)
-          statement.setTimestamp(11, null)
-      process.failure match
-        case Some(failure) =>
-          statement.setString(12, failure.code)
-          statement.setString(13, failure.message)
-        case None =>
-          statement.setString(12, null)
-          statement.setString(13, null)
-      statement.setTimestamp(14, java.sql.Timestamp.from(process.createdAt))
-      statement.setTimestamp(15, java.sql.Timestamp.from(process.updatedAt))
-      statement.executeUpdate()
-    finally statement.close()
+    val updated =
+      try
+        bindUpsert(update, process)
+        update.executeUpdate() > 0
+      finally update.close()
+    if !updated then
+      val insert = connection.prepareStatement(
+        """
+        INSERT INTO bill_payment_processes
+          (inquiry_id, account_id, biller_code, reference_code1, reference_code2,
+           amount, status, resulting_balance, receipt_code, receipt_paid_at,
+           failure_code, failure_message, created_at, updated_at, payment_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+      )
+      try
+        bindUpsert(insert, process)
+        insert.executeUpdate()
+      finally insert.close()
+
+  /** Both upsert statements list their columns in this order, with the key last. */
+  private def bindUpsert(statement: PreparedStatement, process: BillPaymentProcess): Unit =
+    statement.setString(1, process.inquiryId.value.toString)
+    statement.setString(2, process.accountId.value)
+    statement.setString(3, process.debt.billerCode.value)
+    statement.setString(4, process.debt.referenceCode1.value)
+    statement.setString(5, process.debt.referenceCode2.value)
+    statement.setBigDecimal(6, process.debt.amount.amount.bigDecimal)
+    statement.setString(7, process.status.toString)
+    setNullableDecimal(statement, 8, process.resultingBalance)
+    process.billerReceipt match
+      case Some(receipt) =>
+        statement.setString(9, receipt.receiptCode)
+        statement.setTimestamp(10, java.sql.Timestamp.from(receipt.paidAt))
+      case None =>
+        statement.setString(9, null)
+        statement.setTimestamp(10, null)
+    process.failure match
+      case Some(failure) =>
+        statement.setString(11, failure.code)
+        statement.setString(12, failure.message)
+      case None =>
+        statement.setString(11, null)
+        statement.setString(12, null)
+    statement.setTimestamp(13, java.sql.Timestamp.from(process.createdAt))
+    statement.setTimestamp(14, java.sql.Timestamp.from(process.updatedAt))
+    statement.setString(15, process.paymentId.value.toString)
 
   private def setNullableDecimal(statement: PreparedStatement, index: Int, value: Option[BigDecimal]): Unit =
     value match

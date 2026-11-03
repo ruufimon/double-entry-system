@@ -88,26 +88,45 @@ final class H2BillPaymentInquiryRepository(database: Database) extends BillPayme
         )
     finally statement.close()
 
+  // H2's MERGE ... KEY is not valid on PostgreSQL, and this form works on both.
+  // Inquiry ids are new UUIDs and updates hold the row lock, so the two steps cannot race.
   private def upsert(connection: Connection, inquiry: BillPaymentInquiry): Unit =
-    val statement = connection.prepareStatement(
+    val update = connection.prepareStatement(
       """
-      MERGE INTO bill_payment_inquiries
-        (inquiry_id, account_id, biller_code, reference_code1, reference_code2, amount, expires_at, status)
-      KEY (inquiry_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      UPDATE bill_payment_inquiries
+      SET account_id = ?, biller_code = ?, reference_code1 = ?, reference_code2 = ?,
+          amount = ?, expires_at = ?, status = ?
+      WHERE inquiry_id = ?
       """
     )
-    try
-      statement.setString(1, inquiry.inquiryId.value.toString)
-      statement.setString(2, inquiry.accountId.value)
-      statement.setString(3, inquiry.debt.billerCode.value)
-      statement.setString(4, inquiry.debt.referenceCode1.value)
-      statement.setString(5, inquiry.debt.referenceCode2.value)
-      statement.setBigDecimal(6, inquiry.debt.amount.amount.bigDecimal)
-      statement.setTimestamp(7, java.sql.Timestamp.from(inquiry.expiresAt))
-      statement.setString(8, inquiry.status.toString)
-      statement.executeUpdate()
-    finally statement.close()
+    val updated =
+      try
+        bindUpsert(update, inquiry)
+        update.executeUpdate() > 0
+      finally update.close()
+    if !updated then
+      val insert = connection.prepareStatement(
+        """
+        INSERT INTO bill_payment_inquiries
+          (account_id, biller_code, reference_code1, reference_code2, amount, expires_at, status, inquiry_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """
+      )
+      try
+        bindUpsert(insert, inquiry)
+        insert.executeUpdate()
+      finally insert.close()
+
+  /** Both upsert statements list their columns in this order, with the key last. */
+  private def bindUpsert(statement: PreparedStatement, inquiry: BillPaymentInquiry): Unit =
+    statement.setString(1, inquiry.accountId.value)
+    statement.setString(2, inquiry.debt.billerCode.value)
+    statement.setString(3, inquiry.debt.referenceCode1.value)
+    statement.setString(4, inquiry.debt.referenceCode2.value)
+    statement.setBigDecimal(5, inquiry.debt.amount.amount.bigDecimal)
+    statement.setTimestamp(6, java.sql.Timestamp.from(inquiry.expiresAt))
+    statement.setString(7, inquiry.status.toString)
+    statement.setString(8, inquiry.inquiryId.value.toString)
 
   private def setStatusIf(
       connection: Connection,

@@ -1,0 +1,158 @@
+# Traefik as the cluster's ingress controller, behind one DigitalOcean load balancer.
+# (ingress-nginx was archived in March 2026.) It runs as a non-root user on high ports
+# and only watches Ingress resources.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: traefik
+  namespace: traefik
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: traefik
+rules:
+  - apiGroups: [""]
+    resources: [services, secrets, nodes]
+    verbs: [get, list, watch]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses, ingressclasses]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses/status]
+    verbs: [update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: traefik
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: traefik
+subjects:
+  - kind: ServiceAccount
+    name: traefik
+    namespace: traefik
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: traefik
+  annotations:
+    ingressclass.kubernetes.io/is-default-class: "true"
+spec:
+  controller: traefik.io/ingress-controller
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+  namespace: traefik
+  labels:
+    app: traefik
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: traefik
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: traefik
+    spec:
+      serviceAccountName: traefik
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: traefik
+      containers:
+        - name: traefik
+          image: traefik:v3.7.17
+          args:
+            - --providers.kubernetesingress=true
+            - --providers.kubernetesingress.ingressclass=traefik
+            - --entrypoints.web.address=:8000
+            - --entrypoints.web.asdefault=true
+            # The service maps 443 to 8443, so the redirect names the public port.
+            - --entrypoints.web.http.redirections.entrypoint.to=:443
+            - --entrypoints.web.http.redirections.entrypoint.scheme=https
+            - --entrypoints.websecure.address=:8443
+            - --entrypoints.websecure.asdefault=true
+            # Every router on this entrypoint terminates TLS, including cert-manager's
+            # temporary challenge routers. Certificates come from each Ingress's tls section.
+            - --entrypoints.websecure.http.tls=true
+            - --entrypoints.ping.address=:8082
+            # On shutdown, keep accepting requests while the load balancer stops sending
+            # traffic here, then finish in-flight ones.
+            - --entrypoints.web.transport.lifecycle.requestacceptgracetimeout=10s
+            - --entrypoints.websecure.transport.lifecycle.requestacceptgracetimeout=10s
+            - --entrypoints.ping.transport.lifecycle.requestacceptgracetimeout=10s
+            - --ping.terminatingstatuscode=503
+            - --ping=true
+            - --ping.entrypoint=ping
+            - --accesslog=true
+            - --log.level=INFO
+            - --global.checknewversion=false
+            - --global.sendanonymoususage=false
+          ports:
+            - {name: web, containerPort: 8000}
+            - {name: websecure, containerPort: 8443}
+            - {name: ping, containerPort: 8082}
+          readinessProbe:
+            httpGet: {path: /ping, port: ping}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /ping, port: ping}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik
+  namespace: traefik
+  annotations:
+    service.beta.kubernetes.io/do-loadbalancer-name: banking-k8s-lb
+spec:
+  type: LoadBalancer
+  selector:
+    app: traefik
+  ports:
+    - {name: web, port: 80, targetPort: web}
+    - {name: websecure, port: 443, targetPort: websecure}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: traefik
+  namespace: traefik
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app: traefik}

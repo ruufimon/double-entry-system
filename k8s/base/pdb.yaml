@@ -1,0 +1,29 @@
+# The UIs run two replicas, so a node drain may take one down but never both.
+# The API has one replica and deliberately no budget: a minAvailable of 1 would
+# make its node impossible to drain.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ui
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app: ui}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: admin-ui
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app: admin-ui}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ui-elm
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app: ui-elm}

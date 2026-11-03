@@ -1,0 +1,125 @@
+# The API is a GraalVM native image. One replica only: bill-payment workflows run on an
+# in-process message bus (#8) and the monthly interest job runs in every instance.
+# A rollout starts the new pod before stopping the old one, so the two briefly overlap.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app: api
+    app.kubernetes.io/part-of: banking
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+        app.kubernetes.io/part-of: banking
+    spec:
+      imagePullSecrets:
+        - name: registry-double-entry-banking
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: registry.digitalocean.com/double-entry-banking/banking-api:preprod
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DB_REQUIRE_POSTGRES
+              value: "true"
+            - name: BILLER_URL
+              value: http://biller:8090
+            # The smallest managed Postgres plan allows about 22 connections. A rollout briefly
+            # runs two API pods, so each one takes a small share.
+            - name: DB_POOL_SIZE
+              value: "4"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: banking-secrets
+                  key: DATABASE_URL
+            - name: ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: banking-secrets
+                  key: ADMIN_TOKEN
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: banking-secrets
+                  key: ADMIN_PASSWORD
+          lifecycle:
+            preStop:
+              # Keep serving while Traefik and the endpoints stop sending traffic here.
+              sleep:
+                seconds: 5
+          startupProbe:
+            httpGet:
+              path: /ping
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  selector:
+    app: api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

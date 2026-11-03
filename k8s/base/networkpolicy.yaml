@@ -1,0 +1,79 @@
+# Everything is closed by default; each policy below opens one path.
+# The API and biller are never reachable from outside the namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-controller-to-uis
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app, operator: In, values: [ui, admin-ui, ui-elm]}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+      ports:
+        - {port: 8080, protocol: TCP}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-uis-to-api
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - {key: app, operator: In, values: [ui, admin-ui, ui-elm]}
+      ports:
+        - {port: 8080, protocol: TCP}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-biller
+spec:
+  podSelector:
+    matchLabels:
+      app: biller
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api
+      ports:
+        - {port: 8090, protocol: TCP}
+---
+# cert-manager answers Let's Encrypt's HTTP-01 challenge from a temporary pod in this
+# namespace; without this rule the default deny blocks Traefik from reaching it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-controller-to-acme-solver
+spec:
+  podSelector:
+    matchLabels:
+      acme.cert-manager.io/http01-solver: "true"
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+      ports:
+        - {port: 8089, protocol: TCP}

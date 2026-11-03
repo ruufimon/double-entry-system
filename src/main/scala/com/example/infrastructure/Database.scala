@@ -146,9 +146,26 @@ object Database:
             )
           )
 
-  def open(url: String, user: String = "banking", password: String = "banking"): Database =
+  /** Connections each API process may hold. Size it so every process that can run at once fits in
+    * the database's connection limit, counting the extra one during a rolling update.
+    */
+  val DefaultPoolSize = 10
+
+  /** Parses DB_POOL_SIZE; absent means the default. */
+  def poolSizeFrom(value: Option[String]): Either[String, Int] =
+    value.map(_.trim).filter(_.nonEmpty) match
+      case None => Right(DefaultPoolSize)
+      case Some(raw) =>
+        raw.toIntOption.filter(_ > 0).toRight(s"DB_POOL_SIZE must be a positive integer, got '$raw'")
+
+  def open(
+      url: String,
+      user: String = "banking",
+      password: String = "banking",
+      maxPoolSize: Int = DefaultPoolSize
+  ): Database =
     Schema.migrate(url, user, password)
-    new Database(url, user, password)
+    new Database(url, user, password, maxPoolSize)
 
 object Schema:
   /** Every migration, in src/main/resources/db/migration. Add new files here too.
@@ -206,14 +223,15 @@ object Schema:
 final class Database(
     val url: String,
     val user: String = "banking",
-    val password: String = "banking"
+    val password: String = "banking",
+    val maxPoolSize: Int = Database.DefaultPoolSize
 ) extends AutoCloseable:
   val dataSource: HikariDataSource =
     val hikariDataSource = new HikariDataSource()
     hikariDataSource.setJdbcUrl(url)
     hikariDataSource.setUsername(user)
     hikariDataSource.setPassword(password)
-    hikariDataSource.setMaximumPoolSize(10)
+    hikariDataSource.setMaximumPoolSize(maxPoolSize)
     hikariDataSource.setConnectionTimeout(5000)
     Using.resource(hikariDataSource.getConnection())(_ => ())
     hikariDataSource

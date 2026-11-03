@@ -141,7 +141,11 @@ object Server:
     val server = new JettyServer(port)
     val context = new ServletContextHandler()
     val (dbUrl, dbUser, dbPassword) = databaseFromEnv()
-    val database = Database.open(dbUrl, dbUser, dbPassword)
+    val poolSize = Database.poolSizeFrom(sys.env.get("DB_POOL_SIZE")).fold(
+      error => throw new IllegalStateException(error),
+      identity
+    )
+    val database = Database.open(dbUrl, dbUser, dbPassword, poolSize)
     val ledgerRepository = new H2LedgerRepository(database)
     val accountRepository = new H2AccountRepository(database)
     val accountOperations = new LedgerBackedAccountOperations(

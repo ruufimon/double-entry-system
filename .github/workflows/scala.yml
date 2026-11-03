@@ -219,15 +219,16 @@ jobs:
   # Publishes images for the DigitalOcean pre-production apps (see .do/preprod).
   # Runs only after every test job passes, and only when the repository
   # variable DO_DEPLOY is "true" and the secret DIGITALOCEAN_ACCESS_TOKEN is set.
-  # Each image is pushed as :<sha> and :preprod; promote-prod later re-tags the
-  # same :<sha> as :prod.
+  # Each image is pushed as :<sha>, and as :preprod for the App Platform branches;
+  # promote-prod later re-tags the same :<sha> as :prod. The k8s branch only pushes
+  # :<sha>, which deploy-k8s-preprod deploys, so it never moves App Platform.
   publish-preprod-images:
     name: Publish pre-prod image (${{ matrix.image }})
     needs: [build, native-image-smoke, ui-unit, ui-e2e, admin-e2e]
     if: >-
       vars.DO_DEPLOY == 'true' &&
       github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cursor/postgres-support-5273')
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cursor/postgres-support-5273' || github.ref == 'refs/heads/k8s')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -268,7 +269,7 @@ jobs:
         push: true
         tags: |
           ${{ env.REGISTRY }}/${{ matrix.image }}:${{ github.sha }}
-          ${{ env.REGISTRY }}/${{ matrix.image }}:preprod
+          ${{ github.ref != 'refs/heads/k8s' && format('{0}/{1}:preprod', env.REGISTRY, matrix.image) || '' }}
         cache-from: type=gha,scope=${{ matrix.image }}
         cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
@@ -279,6 +280,7 @@ jobs:
   promote-prod:
     name: Promote to production
     needs: [publish-preprod-images]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cursor/postgres-support-5273'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -301,4 +303,60 @@ jobs:
           docker buildx imagetools create \
             --tag "$REGISTRY/$image:prod" \
             "$REGISTRY/$image:${{ github.sha }}"
+        done
+
+  # Deploys the commit's images to the Kubernetes pre-prod namespace (see k8s/).
+  # KUBE_CONFIG in the preprod environment holds a service account that can only
+  # change workloads in that namespace. Runs only when K8S_DEPLOY is "true".
+  deploy-k8s-preprod:
+    name: Deploy to Kubernetes pre-prod
+    needs: [publish-preprod-images]
+    if: vars.K8S_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: preprod
+      url: ${{ vars.K8S_PREPROD_URL }}
+    concurrency:
+      group: deploy-k8s-preprod
+      cancel-in-progress: false
+
+    steps:
+    - uses: actions/checkout@v5
+    - name: Write kubeconfig
+      env:
+        KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+      run: |
+        umask 077
+        printf '%s\n' "$KUBE_CONFIG" > "$RUNNER_TEMP/kubeconfig"
+        echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+    - name: Pin images to ${{ github.sha }}
+      run: |
+        sed -i "s/newTag: .*/newTag: ${GITHUB_SHA}/" k8s/overlays/preprod/kustomization.yaml
+        grep -c "newTag: ${GITHUB_SHA}" k8s/overlays/preprod/kustomization.yaml
+    - name: Apply
+      run: kubectl apply -k k8s/overlays/preprod
+    - name: Wait for rollout
+      run: |
+        for deployment in biller api ui admin-ui ui-elm; do
+          kubectl rollout status "deployment/$deployment" --timeout=300s
+        done
+    - name: Smoke test
+      env:
+        BASE_URL: ${{ vars.K8S_PREPROD_URL }}
+      run: |
+        curl -fsS "$BASE_URL/" > /dev/null
+        test "$(curl -fsS "$BASE_URL/api/ping")" = pong
+        curl -fsS "$BASE_URL/api/accounts/acc123/balance"
+        echo
+        test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL/api/no-such-route")" = 404
+    # A failed rollout or smoke test returns every deployment to its previous revision.
+    - name: Roll back
+      if: failure()
+      run: |
+        for deployment in biller api ui admin-ui ui-elm; do
+          kubectl rollout undo "deployment/$deployment" || true
+        done
+        for deployment in biller api ui admin-ui ui-elm; do
+          kubectl rollout status "deployment/$deployment" --timeout=300s || true
         done

@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: preprod
+resources:
+  - ../../base
+# CI replaces newTag with the commit being deployed. Do not use mutable tags for rollbacks.
+images:
+  - name: registry.digitalocean.com/double-entry-banking/banking-api
+    newTag: preprod
+  - name: registry.digitalocean.com/double-entry-banking/banking-biller
+    newTag: preprod
+  - name: registry.digitalocean.com/double-entry-banking/banking-ui
+    newTag: preprod
+  - name: registry.digitalocean.com/double-entry-banking/banking-admin-ui
+    newTag: preprod
+  - name: registry.digitalocean.com/double-entry-banking/banking-ui-elm
+    newTag: preprod
+patches:
+  - path: ingress.yaml
+  - target:
+      kind: Deployment
+      name: ui
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/1/value
+        value: http://api.preprod.svc.cluster.local:8080
+  - target:
+      kind: Deployment
+      name: admin-ui
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/1/value
+        value: http://api.preprod.svc.cluster.local:8080
+  - target:
+      kind: Deployment
+      name: ui-elm
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/1/value
+        value: http://api.preprod.svc.cluster.local:8080

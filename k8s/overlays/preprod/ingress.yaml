@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: banking
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: preprod-ui.139-59-219-31.sslip.io
+      http:
+        paths:
+          - {path: /, pathType: Prefix, backend: {service: {name: ui, port: {number: 8080}}}}
+    - host: preprod-admin.139-59-219-31.sslip.io
+      http:
+        paths:
+          - {path: /, pathType: Prefix, backend: {service: {name: admin-ui, port: {number: 8080}}}}
+    - host: preprod-elm.139-59-219-31.sslip.io
+      http:
+        paths:
+          - {path: /, pathType: Prefix, backend: {service: {name: ui-elm, port: {number: 8080}}}}
+  tls:
+    - secretName: banking-tls
+      hosts:
+        - preprod-ui.139-59-219-31.sslip.io
+        - preprod-admin.139-59-219-31.sslip.io
+        - preprod-elm.139-59-219-31.sslip.io

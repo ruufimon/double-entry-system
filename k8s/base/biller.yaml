@@ -1,0 +1,94 @@
+# Demo-only stand-in for an external biller; reachable only from the API.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: biller
+  labels:
+    app: biller
+    app.kubernetes.io/part-of: banking
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: biller
+  template:
+    metadata:
+      labels:
+        app: biller
+        app.kubernetes.io/part-of: banking
+    spec:
+      imagePullSecrets:
+        - name: registry-double-entry-banking
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: biller
+          image: registry.digitalocean.com/double-entry-banking/banking-biller:preprod
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8090
+          env:
+            - name: BILLER_PORT
+              value: "8090"
+          lifecycle:
+            preStop:
+              # Keep serving while Traefik and the endpoints stop sending traffic here.
+              sleep:
+                seconds: 5
+          startupProbe:
+            httpGet:
+              path: /ping
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 192Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: biller
+  labels:
+    app: biller
+spec:
+  selector:
+    app: biller
+  ports:
+    - name: http
+      port: 8090
+      targetPort: http

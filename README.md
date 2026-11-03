@@ -101,6 +101,8 @@ When PostgreSQL environment variables are set, the app uses PostgreSQL. Otherwis
 
 **Require PostgreSQL:** Set `DB_REQUIRE_POSTGRES=true` to enforce PostgreSQL in any environment. The API will refuse to start with H2 when this flag is set.
 
+**Connection pool:** `DB_POOL_SIZE` sets how many database connections each API process may hold (default 10). Every process that can run at once must fit in the database's connection limit, including the extra process during a rolling update.
+
 The API logs the selected database at startup: `Database: PostgreSQL at host/db (user: ...)` or `Database: H2 in-memory (banking-uuid)`.
 
 In another terminal, install and start the Angular application:

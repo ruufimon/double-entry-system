@@ -1,0 +1,58 @@
+# Deletes old commit-tagged images from the DigitalOcean registry, then runs
+# garbage collection to free their storage. The Basic tier holds 5 GB, and CI
+# pushes five :<sha> images per commit.
+#
+# Keeps the :prod and :preprod tags, any tag pointing at the same image as
+# them, and anything newer than KEEP_DAYS. Runs only when the repository
+# variable DO_REGISTRY_CLEANUP is "true". DIGITALOCEAN_ACCESS_TOKEN needs the
+# registry delete scope for this, beyond the read and update that publishing uses.
+name: Registry cleanup
+
+on:
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: registry-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: vars.DO_REGISTRY_CLEANUP == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      KEEP_DAYS: "30"
+
+    steps:
+    - name: Install doctl
+      uses: digitalocean/action-doctl@v2
+      with:
+        token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+    - name: Delete old commit tags
+      run: |
+        cutoff=$(date -u -d "-${KEEP_DAYS} days" +%s)
+        for repository in banking-api banking-biller banking-ui banking-admin-ui banking-ui-elm; do
+          doctl registry repository list-tags "$repository" -o json > tags.json
+          python3 - "$cutoff" > delete.txt <<'PY'
+        import datetime, json, sys
+        cutoff = int(sys.argv[1])
+        # Untagged entries (such as build provenance) are left to garbage collection.
+        tags = [t for t in json.load(open("tags.json")) if t.get("tag")]
+        kept = {t["manifest_digest"] for t in tags if t["tag"] in ("prod", "preprod")}
+        for t in tags:
+            updated = datetime.datetime.fromisoformat(t["updated_at"].replace("Z", "+00:00")).timestamp()
+            if t["tag"] not in ("prod", "preprod") and t["manifest_digest"] not in kept and updated < cutoff:
+                print(t["tag"])
+        PY
+          echo "$repository: deleting $(wc -l < delete.txt) tags"
+          [ -s delete.txt ] && doctl registry repository delete-tag "$repository" $(cat delete.txt) --force
+        done
+    # The registry is read-only while garbage collection runs, so a deploy
+    # pushed at the same time fails and has to be re-run.
+    - name: Start garbage collection
+      run: doctl registry garbage-collection start --include-untagged-manifests --force

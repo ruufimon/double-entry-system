@@ -3,8 +3,8 @@
 # `preprod` tag, and deploy_on_push redeploys on each push.
 #
 # Apply changes with: doctl apps update <app-id> --spec .do/preprod/api.yaml
-# ADMIN_TOKEN and ADMIN_PASSWORD are encrypted secrets set when the app was
-# created. Applying this file without them clears them, so first copy their
+# DATABASE_URL, ADMIN_TOKEN and ADMIN_PASSWORD are encrypted secrets set when
+# the app was created. Applying this file without them clears them, so first copy their
 # EV[...] values from `doctl apps spec get <app-id>` into a local copy.
 name: banking-preprod-api
 region: sgp
@@ -24,9 +24,13 @@ services:
     health_check:
       http_path: /ping
     envs:
+      # banking_app's connection string for banking-preprod-db, with sslmode=require.
+      # App Platform's database binding failed for this user ("database user was
+      # not found", although it exists), so it is set as a secret instead. Update it
+      # if the banking_app password changes.
       - key: DATABASE_URL
         scope: RUN_TIME
-        value: ${banking-db.DATABASE_URL}
+        type: SECRET
       - key: DB_REQUIRE_POSTGRES
         scope: RUN_TIME
         value: "true"
@@ -54,8 +58,3 @@ services:
     health_check:
       port: 8090
       http_path: /ping
-databases:
-  - name: banking-db
-    engine: PG
-    production: true
-    cluster_name: banking-preprod-db

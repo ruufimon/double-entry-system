@@ -219,6 +219,8 @@ jobs:
   # Publishes images for the DigitalOcean pre-production apps (see .do/preprod).
   # Runs only after every test job passes, and only when the repository
   # variable DO_DEPLOY is "true" and the secret DIGITALOCEAN_ACCESS_TOKEN is set.
+  # Each image is pushed as :<sha> and :preprod; promote-prod later re-tags the
+  # same :<sha> as :prod.
   publish-preprod-images:
     name: Publish pre-prod image (${{ matrix.image }})
     needs: [build, native-image-smoke, ui-unit, ui-e2e, admin-e2e]
@@ -269,3 +271,34 @@ jobs:
           ${{ env.REGISTRY }}/${{ matrix.image }}:preprod
         cache-from: type=gha,scope=${{ matrix.image }}
         cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # Promotes the images that just reached pre-prod to production. The production
+  # environment requires an approval in GitHub before this job starts, and it
+  # re-tags the existing :<sha> images as :prod without rebuilding them, which
+  # triggers deploy_on_push for the apps in .do/prod.
+  promote-prod:
+    name: Promote to production
+    needs: [publish-preprod-images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://banking-preprod-ui-kgmgi.ondigitalocean.app
+    env:
+      REGISTRY: registry.digitalocean.com/${{ vars.DO_REGISTRY }}
+
+    steps:
+    - name: Install doctl
+      uses: digitalocean/action-doctl@v2
+      with:
+        token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+    - name: Log in to the DigitalOcean registry
+      run: doctl registry login --expiry-seconds 600
+    - uses: docker/setup-buildx-action@v3
+    - name: Re-tag ${{ github.sha }} as prod
+      run: |
+        for image in banking-api banking-biller banking-ui banking-admin-ui banking-ui-elm; do
+          docker buildx imagetools create \
+            --tag "$REGISTRY/$image:prod" \
+            "$REGISTRY/$image:${{ github.sha }}"
+        done

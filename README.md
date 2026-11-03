@@ -331,6 +331,52 @@ docker build -f Dockerfile.admin-ui -t banking-admin-ui .
 docker run --rm -p 4300:8080 -e API_URL=http://host.docker.internal:8080 banking-admin-ui
 ```
 
+### DigitalOcean
+
+Production and pre-production run on DigitalOcean App Platform in `sgp1`.
+Each environment has four apps and its own managed PostgreSQL 17 database:
+
+| Environment | Specs | Image tag | Database | Customer UI |
+| --- | --- | --- | --- | --- |
+| Production | [`.do/prod`](.do/prod) | `prod` | `banking-prod-db` | https://banking-preprod-ui-kgmgi.ondigitalocean.app |
+| Pre-production | [`.do/preprod`](.do/preprod) | `preprod` | `banking-preprod-db` | https://banking-preprod-ui-wamur.ondigitalocean.app |
+
+The production URLs still say `preprod`, because App Platform keeps an app's
+original domain when it is renamed. Attach a custom domain to change that.
+
+Each UI is a separate app because it is built with `<base href="/">`, and it
+proxies `/api/*` to its environment's API over HTTPS. The API connects as the
+non-admin database user `banking_app`. `DATABASE_URL`, `ADMIN_TOKEN` and
+`ADMIN_PASSWORD` are encrypted App Platform secrets, so applying a spec file
+as-is clears them: copy their `EV[...]` values from
+`doctl apps spec get <app-id>` into a local copy first. Each database's
+firewall admits only its own API app. After changing a firewall rule,
+redeploy the app, because the rule takes effect only for new deployments.
+
+Releases:
+
+1. A push to `main` that passes every CI job pushes each image as `:<sha>` and
+   `:preprod`, and pre-production redeploys.
+2. The `Promote to production` job then waits for approval in the
+   `production` GitHub environment. Approving it re-tags the same `:<sha>`
+   images as `:prod`, and production redeploys. Nothing is rebuilt.
+
+To roll production back, re-tag an earlier commit as `prod`:
+
+```bash
+doctl registry login
+for image in banking-api banking-biller banking-ui banking-admin-ui banking-ui-elm; do
+  docker buildx imagetools create \
+    --tag registry.digitalocean.com/double-entry-banking/$image:prod \
+    registry.digitalocean.com/double-entry-banking/$image:<sha>
+done
+```
+
+The `Registry cleanup` workflow deletes commit tags older than 30 days,
+keeping whatever `prod` and `preprod` point at. It needs the
+`DO_REGISTRY_CLEANUP` repository variable set to `true`, and a
+`DIGITALOCEAN_ACCESS_TOKEN` with the registry delete scope.
+
 ### Railway
 
 Create three services from this repository and set these variables:

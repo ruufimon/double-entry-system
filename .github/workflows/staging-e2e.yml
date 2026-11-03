@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       customer_url:
-        description: Public Railway URL for the customer UI
+        description: Public URL of the pre-prod customer UI
         required: true
-        default: https://ui-pre-production-8a8b.up.railway.app
+        default: https://banking-preprod-ui-wamur.ondigitalocean.app
         type: string
       admin_url:
-        description: Public Railway URL for the admin UI
+        description: Public URL of the pre-prod admin UI
         required: true
-        default: https://admin-ui-pre-production-8a8b.up.railway.app
+        default: https://banking-preprod-admin-ui-hr4z8.ondigitalocean.app
         type: string
       include_bill_payment:
         description: Run the single-use demo bill lifecycle (requires a freshly restarted staging API)

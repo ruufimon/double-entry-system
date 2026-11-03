@@ -22,4 +22,4 @@ services:
     envs:
       - key: API_URL
         scope: RUN_TIME
-        value: API_PUBLIC_URL
+        value: https://banking-preprod-api-etuk3.ondigitalocean.app

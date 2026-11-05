@@ -1,0 +1,159 @@
+# kube-prometheus-stack for banking-k8s (#20). Installed by k8s/scripts/bootstrap-cluster.sh:
+#   helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     --version 92.18.0 -n monitoring -f k8s/cluster/monitoring/values.yaml
+#
+# Sized for two s-2vcpu-4gb nodes: about 1.1 GiB of memory requests in total. The cluster is
+# scaled to zero overnight, so Prometheus and Alertmanager are off then too; data lives on a
+# DigitalOcean volume and survives the node deletion.
+
+fullnameOverride: kube-prometheus-stack
+
+# DOKS manages the control plane: these components cannot be scraped, and their rules would
+# leave TargetDown and *Down alerts firing forever.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+defaultRules:
+  create: true
+  rules:
+    etcd: false
+    kubeControllerManager: false
+    kubeProxy: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    windows: false
+
+prometheusOperator:
+  resources:
+    requests: {cpu: 50m, memory: 96Mi}
+    limits: {memory: 256Mi}
+
+kube-state-metrics:
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 192Mi}
+
+prometheus-node-exporter:
+  resources:
+    requests: {cpu: 20m, memory: 32Mi}
+    limits: {memory: 96Mi}
+
+prometheus:
+  prometheusSpec:
+    replicas: 1
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    # The money SLO is evaluated over 30 days (spec/MonitoringSLO.md), so keep a little more.
+    retention: 35d
+    retentionSize: 8GB
+    # Pick up every ServiceMonitor and PrometheusRule in the cluster, not only Helm-labelled ones.
+    ruleSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    resources:
+      requests: {cpu: 150m, memory: 512Mi}
+      limits: {memory: 1Gi}
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: do-block-storage
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 10Gi
+
+alertmanager:
+  alertmanagerSpec:
+    replicas: 1
+    resources:
+      requests: {cpu: 10m, memory: 48Mi}
+      limits: {memory: 128Mi}
+    # The webhook URL is a secret (created by the bootstrap with a placeholder), mounted at
+    # /etc/alertmanager/secrets/alertmanager-webhook/url. Point it at Slack, Discord, etc.
+    secrets: [alertmanager-webhook]
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: do-block-storage
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 1Gi
+  config:
+    global:
+      resolve_timeout: 5m
+    # The cluster is off 22:00-06:00 Asia/Bangkok (.github/workflows/cluster-schedule.yml) and
+    # takes a few minutes to come back, so nothing pages until 06:10.
+    time_intervals:
+      - name: overnight
+        time_intervals:
+          - location: Asia/Bangkok
+            times:
+              - start_time: "22:00"
+                end_time: "24:00"
+              - start_time: "00:00"
+                end_time: "06:10"
+    inhibit_rules:
+      - source_matchers: ['severity =~ "page|critical"']
+        target_matchers: ['severity =~ "ticket|warning|info"']
+        equal: [env, alertname]
+    route:
+      receiver: ticket
+      group_by: [alertname, env, namespace]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - receiver: "null"
+          matchers: ['alertname =~ "Watchdog|InfoInhibitor"']
+        - receiver: "null"
+          matchers: ['severity = "info"']
+        # Pre-production never pages (spec/MonitoringSLO.md, Explicit exclusions).
+        - receiver: ticket
+          matchers: ['env = "preprod"']
+          mute_time_intervals: [overnight]
+        - receiver: page
+          matchers: ['severity =~ "page|critical"']
+          repeat_interval: 1h
+          mute_time_intervals: [overnight]
+        - receiver: ticket
+          mute_time_intervals: [overnight]
+    receivers:
+      - name: "null"
+      - name: page
+        webhook_configs:
+          - url_file: /etc/alertmanager/secrets/alertmanager-webhook/url
+            send_resolved: true
+      - name: ticket
+        webhook_configs:
+          - url_file: /etc/alertmanager/secrets/alertmanager-webhook/url
+            send_resolved: true
+    templates: []
+
+grafana:
+  # Reached with: kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80
+  ingress:
+    enabled: false
+  persistence:
+    enabled: false
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  defaultDashboardsTimezone: Asia/Bangkok
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 256Mi}

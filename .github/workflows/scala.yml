@@ -38,6 +38,17 @@ jobs:
       run: sbt test
       # Optional: This step uploads information to the GitHub dependency graph and unblocking Dependabot alerts for the repository
 
+  monitoring-rules:
+    name: Monitoring Rules (promtool)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v5
+    - name: Lint and unit-test PrometheusRules
+      run: |
+        python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
+        monitoring/check-rules.sh
+
   native-image-smoke:
     name: Native Image Smoke Test (Postgres)
     runs-on: ubuntu-latest

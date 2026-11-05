@@ -1,0 +1,159 @@
+# Money-class availability SLO and ledger correctness alerts (#21).
+# Design and thresholds: spec/MonitoringSLO.md. Target 99.9% => error budget 0.001.
+# Good = outcome success|rejected. Bad = dependency|misconfigured|error.
+# Every series carries env (preprod|prod) from the ServiceMonitor relabelling. Alertmanager
+# routes env="preprod" as tickets only and mutes everything 22:00-06:10 Asia/Bangkok.
+#
+# Unit tests: k8s/cluster/monitoring/rules/tests/. Run: monitoring/check-rules.sh
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: banking-money-slo
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: banking
+spec:
+  groups:
+    - name: banking-money-slo.recording
+      interval: 30s
+      rules:
+      - record: slo:money_requests_total:rate5m
+        expr: sum by (env) (rate(http_server_requests_seconds_count{job="api",class="money"}[5m]))
+      - record: slo:money_requests_bad:rate5m
+        # "or ... * 0" keeps the series at 0 when no bad request has ever been recorded.
+        expr: |
+          sum by (env) (rate(http_server_requests_seconds_count{job="api",class="money",outcome=~"dependency|misconfigured|error"}[5m]))
+            or slo:money_requests_total:rate5m * 0
+      - record: slo:money_error_ratio:rate5m
+        expr: slo:money_requests_bad:rate5m / slo:money_requests_total:rate5m
+      - record: slo:money_requests_total:rate30m
+        expr: sum by (env) (rate(http_server_requests_seconds_count{job="api",class="money"}[30m]))
+      - record: slo:money_requests_bad:rate30m
+        # "or ... * 0" keeps the series at 0 when no bad request has ever been recorded.
+        expr: |
+          sum by (env) (rate(http_server_requests_seconds_count{job="api",class="money",outcome=~"dependency|misconfigured|error"}[30m]))
+            or slo:money_requests_total:rate30m * 0
+      - record: slo:money_error_ratio:rate30m
+        expr: slo:money_requests_bad:rate30m / slo:money_requests_total:rate30m
+      - record: slo:money_requests_total:rate1h
+        expr: sum by (env) (rate(http_server_requests_seconds_count{job="api",class="money"}[1h]))
+      - record: slo:money_requests_bad:rate1h
+        # "or ... * 0" keeps the series at 0 when no bad request has ever been recorded.
+        expr: |
+          sum by (env) (rate(http_server_requests_seconds_count{job="api",class="money",outcome=~"dependency|misconfigured|error"}[1h]))
+            or slo:money_requests_total:rate1h * 0
+      - record: slo:money_error_ratio:rate1h
+        expr: slo:money_requests_bad:rate1h / slo:money_requests_total:rate1h
+      - record: slo:money_requests_total:rate6h
+        expr: sum by (env) (rate(http_server_requests_seconds_count{job="api",class="money"}[6h]))
+      - record: slo:money_requests_bad:rate6h
+        # "or ... * 0" keeps the series at 0 when no bad request has ever been recorded.
+        expr: |
+          sum by (env) (rate(http_server_requests_seconds_count{job="api",class="money",outcome=~"dependency|misconfigured|error"}[6h]))
+            or slo:money_requests_total:rate6h * 0
+      - record: slo:money_error_ratio:rate6h
+        expr: slo:money_requests_bad:rate6h / slo:money_requests_total:rate6h
+      - record: slo:money_requests_total:rate3d
+        expr: sum by (env) (rate(http_server_requests_seconds_count{job="api",class="money"}[3d]))
+      - record: slo:money_requests_bad:rate3d
+        # "or ... * 0" keeps the series at 0 when no bad request has ever been recorded.
+        expr: |
+          sum by (env) (rate(http_server_requests_seconds_count{job="api",class="money",outcome=~"dependency|misconfigured|error"}[3d]))
+            or slo:money_requests_total:rate3d * 0
+      - record: slo:money_error_ratio:rate3d
+        expr: slo:money_requests_bad:rate3d / slo:money_requests_total:rate3d
+    - name: banking-money-slo.budget
+      interval: 5m
+      rules:
+      - record: slo:money_availability:ratio_30d
+        expr: |
+          1 - (
+            (sum by (env) (increase(http_server_requests_seconds_count{job="api",class="money",outcome=~"dependency|misconfigured|error"}[30d]))
+              or sum by (env) (increase(http_server_requests_seconds_count{job="api",class="money"}[30d])) * 0)
+            /
+            sum by (env) (increase(http_server_requests_seconds_count{job="api",class="money"}[30d]))
+          )
+      - record: slo:money_error_budget_remaining:ratio
+        expr: 1 - (1 - slo:money_availability:ratio_30d) / 0.001
+    - name: banking-money-slo.alerts
+      rules:
+      # Multi-window burn rates. The traffic guard (~108 requests/hour) stops a quiet
+      # environment from paging on a handful of failures.
+      - alert: MoneyAvailabilityFastBurn
+        expr: |
+          slo:money_error_ratio:rate1h > (14.4 * 0.001)
+          and slo:money_error_ratio:rate5m > (14.4 * 0.001)
+          and slo:money_requests_total:rate1h > 0.03
+        for: 2m
+        labels:
+          severity: page
+          slo: money-availability
+        annotations:
+          summary: "Money endpoints burning error budget 14.4x ({{ $labels.env }})"
+          description: "{{ $value | humanizePercentage }} of money-class requests failed over the last hour; at this rate 2% of the 30-day budget is gone in an hour."
+          runbook_url: https://github.com/ruufimon/double-entry-system/blob/main/docs/runbooks/money-availability-burn.md
+      - alert: MoneyAvailabilitySlowBurn
+        expr: |
+          slo:money_error_ratio:rate6h > (6 * 0.001)
+          and slo:money_error_ratio:rate30m > (6 * 0.001)
+          and slo:money_requests_total:rate6h > 0.03
+        for: 15m
+        labels:
+          severity: page
+          slo: money-availability
+        annotations:
+          summary: "Money endpoints burning error budget 6x ({{ $labels.env }})"
+          description: "{{ $value | humanizePercentage }} of money-class requests failed over 6 hours; 5% of the 30-day budget is gone every 6 hours."
+          runbook_url: https://github.com/ruufimon/double-entry-system/blob/main/docs/runbooks/money-availability-burn.md
+      - alert: MoneyAvailabilityBudgetBurn
+        expr: |
+          slo:money_error_ratio:rate3d > 0.001
+          and slo:money_error_ratio:rate6h > 0.001
+          and slo:money_requests_total:rate3d > 0.03
+        for: 1h
+        labels:
+          severity: ticket
+          slo: money-availability
+        annotations:
+          summary: "Money endpoints spending error budget faster than it accrues ({{ $labels.env }})"
+          description: "Over 3 days {{ $value | humanizePercentage }} of money-class requests failed, above the 0.1% budget."
+          runbook_url: https://github.com/ruufimon/double-entry-system/blob/main/docs/runbooks/money-availability-burn.md
+      - alert: LedgerUnbalancedTransactions
+        expr: max by (env) (banking_ledger_unbalanced_transactions{job="api"}) > 0
+        labels:
+          severity: page
+          slo: ledger-balance
+        annotations:
+          summary: "{{ $value }} ledger transaction(s) do not balance ({{ $labels.env }})"
+          description: "Credits and debits of at least one ledger transaction do not sum to zero. Stop money movement and follow the runbook."
+          runbook_url: https://github.com/ruufimon/double-entry-system/blob/main/docs/runbooks/ledger-unbalanced.md
+      - alert: LedgerCheckFailing
+        expr: sum by (env) (increase(banking_ledger_check_duration_seconds_count{job="api",result!="ok"}[10m])) > 5
+        labels:
+          severity: ticket
+          slo: ledger-balance
+        annotations:
+          summary: "Ledger balance check is not completing ({{ $labels.env }})"
+          description: "{{ $value | humanize }} checks were skipped or failed in 10 minutes, so an unbalanced ledger would go unnoticed."
+          runbook_url: https://github.com/ruufimon/double-entry-system/blob/main/docs/runbooks/ledger-unbalanced.md
+      # absent() drops labels, so one rule per environment.
+      - alert: ApiMetricsAbsent
+        expr: absent(up{job="api",env="prod"} == 1)
+        for: 5m
+        labels:
+          severity: page
+          env: prod
+        annotations:
+          summary: "No metrics from the production API for 5 minutes"
+          description: "Prometheus cannot scrape the API in prod. Every SLO above is blind until this is fixed."
+          runbook_url: https://github.com/ruufimon/double-entry-system/blob/main/docs/runbooks/api-metrics-absent.md
+      - alert: ApiMetricsAbsent
+        expr: absent(up{job="api",env="preprod"} == 1)
+        for: 5m
+        labels:
+          severity: ticket
+          env: preprod
+        annotations:
+          summary: "No metrics from the pre-production API for 5 minutes"
+          description: "Prometheus cannot scrape the API in preprod."
+          runbook_url: https://github.com/ruufimon/double-entry-system/blob/main/docs/runbooks/api-metrics-absent.md

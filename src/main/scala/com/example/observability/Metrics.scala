@@ -26,6 +26,15 @@ object Metrics:
 
   val RequestTimerName = "http.server.requests"
 
+  /** Methods recorded by name. HTTP allows any token as a method, so everything else is `OTHER`;
+    * otherwise a client could create a new histogram per request.
+    */
+  val KnownMethods: Set[String] = Set("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+
+  def methodLabel(method: String): String =
+    val upper = Option(method).fold("")(_.toUpperCase)
+    if KnownMethods.contains(upper) then upper else "OTHER"
+
   def registry(): PrometheusMeterRegistry =
     val registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
     registry.config().commonTags("service", "banking-api")
@@ -58,7 +67,7 @@ final class RequestMetricsFilter(registry: MeterRegistry) extends Filter:
         .builder(Metrics.RequestTimerName)
         .description("HTTP request latency by documented route")
         .tag("route", route.template)
-        .tag("method", request.getMethod.toUpperCase)
+        .tag("method", Metrics.methodLabel(request.getMethod))
         .tag("status", status.toString)
         .tag("outcome", Outcome.of(route.routeClass, status))
         .tag("class", route.routeClass.label)

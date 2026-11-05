@@ -45,21 +45,28 @@ resolved path.
 
 ## Error classification
 
-The classification is by HTTP status first and by the `error` code in the body
-second. It is the single source for the `outcome` label.
+The `outcome` label is decided from the HTTP status and the route class only;
+no response body is read (`Outcome.of`, pinned by `OutcomeSpec`). This table is
+the single source for it. The error codes show which responses land in each row
+today.
 
-| Outcome | Status and code | Counts against availability |
-|---|---|---|
-| `success` | 2xx | no |
-| `rejected` | 400 any, 404 any, 409 `insufficient_funds`, `bill_payment_in_progress`, `bill_payment_already_completed`, `duplicate_transaction`, `transaction_already_reversed`, 410 `bill_payment_inquiry_expired`, 401 `admin_auth_required` | no, tracked separately |
-| `dependency` | 503 `biller_unavailable`, 502 `biller_settlement_failed` | **yes** for `bill`, and feeds the biller dependency SLI |
-| `misconfigured` | 503 `admin_auth_not_configured` | yes |
-| `error` | 500 any (`internal_error`, `bill_payment_compensation_failed`), any response without a JSON error body, connection reset, server-side timeout | yes |
+| Outcome | Status and class | Error codes today | Counts against availability |
+|---|---|---|---|
+| `success` | 1xx, 2xx, 3xx | none | no |
+| `rejected` | any 4xx | `insufficient_funds`, `bill_payment_in_progress`, `bill_payment_already_completed`, `duplicate_transaction`, `transaction_already_reversed`, `bill_payment_inquiry_expired`, `admin_auth_required`, validation and not-found errors | no, tracked separately |
+| `dependency` | 502 or 503 on a `bill` route | `biller_settlement_failed`, `biller_unavailable` | **yes** for `bill`, and feeds the biller dependency SLI |
+| `misconfigured` | 503 on any other class | `admin_auth_not_configured` | yes |
+| `error` | any other 5xx, and an exception that escapes the servlet (recorded as 500) | `internal_error`, `bill_payment_compensation_failed` | yes |
+
+Connection resets and client-side timeouts never reach the server's histogram;
+this SLI does not see them.
 
 Rules:
 
-- A new error code is `error` until this table assigns it. Adding a code without
-  updating this table fails code review.
+- A new error code takes the row its status puts it in. Giving a new code a
+  status whose row does not fit it (for example a client mistake answered with
+  a 5xx, or a dependency failure on a non-`bill` route) requires changing this
+  table and `Outcome.of` together, in the same review.
 - `rejected` responses still count toward the latency SLI. A slow rejection is
   still slow.
 - 401 and 403 move to `rejected` for customer routes once #5 lands; a burst of

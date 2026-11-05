@@ -1,0 +1,148 @@
+# promtool unit tests for rules/money-availability.yaml. Run: monitoring/check-rules.sh
+# The rule file under test is extracted from the PrometheusRule's spec by that script.
+rule_files:
+  - money-availability.rules.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # Healthy traffic: 2 req/s money, 1% rejected (business errors), nothing bad.
+  - interval: 30s
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="api",env="prod",class="money",outcome="success",route="/accounts/:accountId/deposits"}'
+        values: '0+59.4x240'
+      - series: 'http_server_requests_seconds_count{job="api",env="prod",class="money",outcome="rejected",route="/accounts/:accountId/withdrawals"}'
+        values: '0+0.6x240'
+      - series: 'up{job="api",env="prod"}'
+        values: '1x240'
+      - series: 'up{job="api",env="preprod"}'
+        values: '1x240'
+      - series: 'banking_ledger_unbalanced_transactions{job="api",env="prod"}'
+        values: '0x240'
+    promql_expr_test:
+      - expr: slo:money_error_ratio:rate5m
+        eval_time: 1h
+        exp_samples:
+          - labels: 'slo:money_error_ratio:rate5m{env="prod"}'
+            value: 0
+      - expr: round(slo:money_requests_total:rate1h, 0.001)
+        eval_time: 2h
+        exp_samples:
+          - labels: '{env="prod"}'
+            value: 2
+    alert_rule_test:
+      - {eval_time: 2h, alertname: MoneyAvailabilityFastBurn, exp_alerts: []}
+      - {eval_time: 2h, alertname: MoneyAvailabilitySlowBurn, exp_alerts: []}
+      - {eval_time: 2h, alertname: LedgerUnbalancedTransactions, exp_alerts: []}
+      - {eval_time: 2h, alertname: ApiMetricsAbsent, exp_alerts: []}
+
+  # Database cut off: from 1h onwards 5% of money requests return 500.
+  - interval: 30s
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="api",env="prod",class="money",outcome="success"}'
+        values: '0+60x120 7200+57x240'
+      - series: 'http_server_requests_seconds_count{job="api",env="prod",class="money",outcome="error"}'
+        values: '0x120 0+3x240'
+    alert_rule_test:
+      # Five minutes after the failure starts the 1h ratio is still below 1.44%.
+      # At 2h30m the whole last hour failed at exactly 5%, so $value is exact.
+      - {eval_time: 65m, alertname: MoneyAvailabilityFastBurn, exp_alerts: []}
+      - eval_time: 2h30m
+        alertname: MoneyAvailabilityFastBurn
+        exp_alerts:
+          - exp_labels: {severity: page, slo: money-availability, env: prod}
+            exp_annotations:
+              summary: "Money endpoints burning error budget 14.4x (prod)"
+              description: "5% of money-class requests failed over the last hour; at this rate 2% of the 30-day budget is gone in an hour."
+              runbook_url: https://github.com/ruufimon/double-entry-system/blob/main/docs/runbooks/money-availability-burn.md
+
+  # The same 5% failure rate on a nearly idle environment (about 36 requests an hour) must not page.
+  - interval: 30s
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="api",env="preprod",class="money",outcome="success"}'
+        values: '0+0.285x240'
+      - series: 'http_server_requests_seconds_count{job="api",env="preprod",class="money",outcome="error"}'
+        values: '0+0.015x240'
+    alert_rule_test:
+      - {eval_time: 2h, alertname: MoneyAvailabilityFastBurn, exp_alerts: []}
+
+  # Slow bleed: 1% errors for 7 hours fires the 6x alert but not the 14.4x one.
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="api",env="prod",class="money",outcome="success"}'
+        values: '0+118.8x480'
+      - series: 'http_server_requests_seconds_count{job="api",env="prod",class="money",outcome="error"}'
+        values: '0+1.2x480'
+    alert_rule_test:
+      - {eval_time: 7h, alertname: MoneyAvailabilityFastBurn, exp_alerts: []}
+      - eval_time: 7h
+        alertname: MoneyAvailabilitySlowBurn
+        exp_alerts:
+          - exp_labels: {severity: page, slo: money-availability, env: prod}
+            exp_annotations:
+              summary: "Money endpoints burning error budget 6x (prod)"
+              description: "1% of money-class requests failed over 6 hours; 5% of the 30-day budget is gone every 6 hours."
+              runbook_url: https://github.com/ruufimon/double-entry-system/blob/main/docs/runbooks/money-availability-burn.md
+
+  # Budget and availability: 99.95% over the window, half the budget left.
+  - interval: 5m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="api",env="prod",class="money",outcome="success"}'
+        values: '0+599.7x288'
+      - series: 'http_server_requests_seconds_count{job="api",env="prod",class="money",outcome="error"}'
+        values: '0+0.3x288'
+    promql_expr_test:
+      - expr: round(slo:money_availability:ratio_30d * 100000)
+        eval_time: 1d
+        exp_samples:
+          - labels: '{env="prod"}'
+            value: 99950
+      - expr: round(slo:money_error_budget_remaining:ratio, 0.001)
+        eval_time: 1d
+        exp_samples:
+          - labels: '{env="prod"}'
+            value: 0.5
+
+  # An unbalanced ledger pages immediately; a failing check opens a ticket.
+  - interval: 1m
+    input_series:
+      - series: 'banking_ledger_unbalanced_transactions{job="api",env="prod",pod="api-1"}'
+        values: '0x5 2x5'
+      - series: 'banking_ledger_check_duration_seconds_count{job="api",env="prod",result="failed"}'
+        values: '0x5 0+1x10'
+    alert_rule_test:
+      - {eval_time: 4m, alertname: LedgerUnbalancedTransactions, exp_alerts: []}
+      - eval_time: 7m
+        alertname: LedgerUnbalancedTransactions
+        exp_alerts:
+          - exp_labels: {severity: page, slo: ledger-balance, env: prod}
+            exp_annotations:
+              summary: "2 ledger transaction(s) do not balance (prod)"
+              description: "Credits and debits of at least one ledger transaction do not sum to zero. Stop money movement and follow the runbook."
+              runbook_url: https://github.com/ruufimon/double-entry-system/blob/main/docs/runbooks/ledger-unbalanced.md
+      - eval_time: 15m
+        alertname: LedgerCheckFailing
+        exp_alerts:
+          - exp_labels: {severity: ticket, slo: ledger-balance, env: prod}
+            exp_annotations:
+              summary: "Ledger balance check is not completing (prod)"
+              description: "9 checks were skipped or failed in 10 minutes, so an unbalanced ledger would go unnoticed."
+              runbook_url: https://github.com/ruufimon/double-entry-system/blob/main/docs/runbooks/ledger-unbalanced.md
+
+  # The production API disappears for more than 5 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="api",env="prod"}'
+        values: '1x5 0x10'
+      - series: 'up{job="api",env="preprod"}'
+        values: '1x15'
+    alert_rule_test:
+      - {eval_time: 9m, alertname: ApiMetricsAbsent, exp_alerts: []}
+      - eval_time: 12m
+        alertname: ApiMetricsAbsent
+        exp_alerts:
+          - exp_labels: {severity: page, env: prod}
+            exp_annotations:
+              summary: "No metrics from the production API for 5 minutes"
+              description: "Prometheus cannot scrape the API in prod. Every SLO above is blind until this is fixed."
+              runbook_url: https://github.com/ruufimon/double-entry-system/blob/main/docs/runbooks/api-metrics-absent.md

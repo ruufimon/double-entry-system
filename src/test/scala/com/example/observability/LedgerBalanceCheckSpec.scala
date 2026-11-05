@@ -95,3 +95,25 @@ final class LedgerBalanceCheckSpec extends AnyFunSuite with Matchers:
       timerCount(registry, "failed") shouldBe 1
     finally check.close()
   }
+
+  test("an exhausted pool is skipped at once instead of queueing behind customer requests") {
+    val database = Database.open(Database.h2MemoryUrl(s"ledger-check-${UUID.randomUUID()}"), maxPoolSize = 1)
+    val registry = new SimpleMeterRegistry()
+    val check = new LedgerBalanceCheck(database, registry)
+    try
+      val started = System.nanoTime()
+      database.withConnection(_ => check.runOnce()) shouldBe LedgerCheckResult.Skipped
+      (System.nanoTime() - started) should be < 1_000_000_000L
+      timerCount(registry, "skipped") shouldBe 1
+      gauge(registry) shouldBe -1.0
+    finally
+      check.close()
+      database.close()
+  }
+
+  test("PostgreSQL's query-cancelled SQLSTATE counts as a timeout") {
+    LedgerBalanceCheck.isQueryTimeout(new java.sql.SQLException("canceling statement", "57014")) shouldBe true
+    LedgerBalanceCheck.isQueryTimeout(new java.sql.SQLTimeoutException("timed out")) shouldBe true
+    LedgerBalanceCheck.isQueryTimeout(new java.sql.SQLException("connection refused", "08001")) shouldBe false
+    LedgerBalanceCheck.isQueryTimeout(new java.sql.SQLException("no state")) shouldBe false
+  }

@@ -38,6 +38,17 @@ jobs:
       run: sbt test
       # Optional: This step uploads information to the GitHub dependency graph and unblocking Dependabot alerts for the repository
 
+  monitoring-rules:
+    name: Monitoring Rules (promtool)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v5
+    - name: Lint and unit-test PrometheusRules
+      run: |
+        python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
+        monitoring/check-rules.sh
+
   native-image-smoke:
     name: Native Image Smoke Test (Postgres)
     runs-on: ubuntu-latest
@@ -240,7 +251,7 @@ jobs:
   # last build that reached pre-prod; the k8s branch never does.
   publish-preprod-images:
     name: Publish pre-prod image (${{ matrix.image }})
-    needs: [build, native-image-smoke, ui-unit, ui-e2e, admin-e2e]
+    needs: [build, native-image-smoke, ui-unit, ui-e2e, admin-e2e, monitoring-rules]
     if: >-
       vars.DO_DEPLOY == 'true' &&
       github.event_name == 'push' &&

@@ -437,10 +437,14 @@ The first SLO built on these metrics, its alert rules and dashboard are tracked 
 
 ```bash
 sbt -batch stage
-docker run --rm -v "$PWD:/app" -w /app ghcr.io/graalvm/native-image-community:25 \
-  java -agentlib:native-image-agent=config-merge-dir=src/main/resources/META-INF/native-image/com.example/scalatra-ping-api \
-       -cp 'target/out/jvm/scala-*/scalatra-ping-api/universal/stage/lib/*' com.example.Server &
-# exercise every route (the ServerIntegrationSpec requests are a good script), then stop the process
+# Resolve the Scala version directory here; a Java classpath wildcard only expands the last segment.
+STAGE=$(echo target/out/jvm/scala-*/scalatra-ping-api/universal/stage)
+docker run --rm -v "$PWD:/app" -w /app -p 8080:8080 -p 9090:9090 \
+  --entrypoint java ghcr.io/graalvm/native-image-community:25 \
+  -agentlib:native-image-agent=config-merge-dir=src/main/resources/META-INF/native-image/com.example/scalatra-ping-api \
+  -cp "$STAGE/lib/*" com.example.Server &
+# exercise every route on localhost:8080 (the ServerIntegrationSpec requests are a good script),
+# scrape localhost:9090/metrics, then stop the container
 ```
 
 `config-merge-dir` adds to the existing file instead of replacing it. Libraries that ship their own metadata, such as Micrometer, need nothing here. The CI job `Native Image Smoke Test` boots the image against PostgreSQL, restarts it, and checks `/metrics`, so a missing entry fails there before it reaches a deploy.

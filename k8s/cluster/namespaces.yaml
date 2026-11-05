@@ -17,11 +17,14 @@ metadata:
   labels:
     pod-security.kubernetes.io/enforce: restricted
 ---
-# kube-prometheus-stack (#20). node-exporter needs host access, so this namespace is `baseline`,
-# not `restricted`.
+# kube-prometheus-stack (#20). node-exporter uses host networking, the host PID namespace and
+# hostPath volumes, which both `restricted` and `baseline` forbid, so this namespace enforces
+# `privileged`. Warn and audit stay at `baseline` so any other pod that needs host access shows up.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: monitoring
   labels:
-    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/audit: baseline

@@ -85,6 +85,43 @@ the repository variable `CLUSTER_SCHEDULE` is `true`. Run it by hand from the
 Actions tab (action `off` or `on`) at any time, for example to bring the cluster
 up early.
 
+## Monitoring
+
+`kube-prometheus-stack` runs in the `monitoring` namespace: Prometheus, Alertmanager, Grafana,
+kube-state-metrics and node-exporter. `bootstrap-cluster.sh` installs it from
+`cluster/monitoring/values.yaml` (chart pinned there) and applies the banking pieces:
+
+| File | What it does |
+| --- | --- |
+| `cluster/monitoring/api-servicemonitor.yaml` | Scrapes the API's metrics port (9090) in `preprod` and `prod`, labelled `env` |
+| `cluster/monitoring/rules/money-availability.yaml` | Money-class SLO recording rules, burn-rate and ledger alerts ([spec](../spec/MonitoringSLO.md)) |
+| `cluster/monitoring/dashboards/money-slo.yaml` | The "Money SLO" Grafana dashboard |
+
+Rule changes are checked by `monitoring/check-rules.sh` (promtool lint plus unit tests in
+`cluster/monitoring/rules/tests/`), which CI also runs. Runbooks for every alert are in
+`docs/runbooks/`.
+
+```bash
+kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80        # Grafana, user admin
+kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d
+kubectl -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090        # Prometheus
+kubectl -n monitoring port-forward svc/kube-prometheus-stack-alertmanager 9093      # Alertmanager
+```
+
+Alerts go to one webhook, the `url` key of the `alertmanager-webhook` secret. The bootstrap
+creates it with a placeholder, so nothing is delivered until it is replaced. Production
+`page` alerts and default `critical` rules go to the page route; everything from `preprod`,
+`ticket` alerts and `warning` rules go to the ticket route. Both are muted 22:00 to 06:10
+Asia/Bangkok: overnight the stack is off with the rest of the cluster, and the mute covers
+the restart. Prometheus keeps 35 days (the SLO window is 30) on a 10 GiB volume that survives
+the nightly node deletion.
+
+The stack requests about 1.1 GiB of memory across the two nodes, roughly twice what the apps
+request. The autoscaler may add the third node under load.
+
+To test the money SLO alert end to end, run `monitoring/synthetic/money-fast-burn.sh` against
+pre-production (it refuses production).
+
 ## Rollback
 
 Normally, re-run the deploy job of an earlier commit, or `kubectl apply -k` with

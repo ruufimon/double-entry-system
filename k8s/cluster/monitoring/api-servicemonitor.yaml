@@ -1,0 +1,25 @@
+# Scrapes the banking API's metrics port (METRICS_PORT 9090) in both environments (#21).
+# The network policy allow-monitoring-to-api-metrics in k8s/base admits only this namespace.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: banking-api
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: banking
+spec:
+  jobLabel: app
+  namespaceSelector:
+    matchNames: [preprod, prod]
+  selector:
+    matchLabels:
+      app: api
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      relabelings:
+        # env is the label every SLO rule, alert and dashboard groups by.
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: env

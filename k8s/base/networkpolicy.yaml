@@ -42,6 +42,25 @@ spec:
       ports:
         - {port: 8080, protocol: TCP}
 ---
+# Prometheus in the monitoring namespace scrapes the API's metrics port. Nothing else may reach
+# it, and the UIs' rule above stays on 8080, so /metrics is never exposed through them.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-to-api-metrics
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - {port: 9090, protocol: TCP}
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

@@ -129,6 +129,8 @@ Startup prints `Database: PostgreSQL at <host>/<database> (user: ...)` or `Datab
 
 `RAILWAY_ENVIRONMENT` or `DB_REQUIRE_POSTGRES=true` refuses to start unless PostgreSQL configuration is present. `DB_POOL_SIZE` is the Hikari maximum pool size (default 10, must be a positive integer).
 
+`METRICS_PORT` (default 9090) is a second listener that serves only `GET /metrics`, the Prometheus text exposition. It is not reachable through the UIs, which proxy `/api/*` to `PORT`, and `PORT` has no `/metrics`. See [Monitoring](#monitoring).
+
 `ADMIN_TOKEN` is the bearer token for adjustment routes. If it is unset, those routes return 401 and the rest of the API still starts. `ADMIN_PASSWORD` is the HTTP Basic password for interest routes; the username is `admin`. If it is unset or empty, interest routes return 503.
 
 Neither credential is baked into a UI build. The admin console asks for the admin password on the interest-rate page and keeps it only in memory while that page is open; it is never written to `localStorage` or `sessionStorage`. The adjustment routes are called with the bearer token directly, as in the examples below.
@@ -415,6 +417,34 @@ curl -X PUT http://localhost:8080/admin/interest-rate \
 
 `history` is newest first. `status` is `current`, `scheduled`, or `superseded`. Before any `PUT`, `scheduledRate` and `scheduledEffectiveFrom` are omitted and history contains only the default row. The dates above are for a change made in November 2026: `currentEffectiveFrom` is the first of the current Bangkok month, and a `PUT` schedules the first of the next month.
 
+## Monitoring
+
+The API records every request on `PORT` into `http_server_requests_seconds`, a Prometheus histogram with buckets at 25, 50, 100, 200, 500 ms and 1, 2, 5 s. Labels are bounded by design: `route` is the documented template from the API table (`/accounts/:accountId/deposits`), never the real path; `class` is `read`, `money`, `bill`, `probe` or `other`; `outcome` is `success`, `rejected`, `dependency`, `misconfigured` or `error`, decided from status and class as in [spec/MonitoringSLO.md](spec/MonitoringSLO.md). Unknown paths are `route="unmatched"`. Identifiers never become label values.
+
+Also exposed: `hikaricp_connections_*{pool="banking"}` from the connection pool, and `banking_ledger_unbalanced_transactions`, recomputed every 60 seconds by a query that groups `ledger_entries` by transaction and counts those whose credits and debits do not cancel. It is `-1` until the first check and must otherwise be `0`; the check has a 2-second query timeout and reports `banking_ledger_check_duration_seconds{result="ok"|"skipped"|"failed"}`.
+
+```bash
+sbt run &
+curl -s -X POST -H 'Content-Type: application/json' -d '{"amount":1.00}' localhost:8080/accounts/acc123/deposits
+curl -s localhost:9090/metrics | grep -E 'class="money"|ledger_unbalanced'
+```
+
+The first SLO built on these metrics, its alert rules and dashboard are tracked in #9 (issues #16 to #23). In Kubernetes the metrics port is opened only to the `monitoring` namespace (`k8s/base/networkpolicy.yaml`).
+
+### Native image metadata
+
+`Dockerfile.native` compiles with the reflection and resource metadata in `src/main/resources/META-INF/native-image/com.example/scalatra-ping-api/reachability-metadata.json`. Regenerate it when routes, JSON models or libraries change. There is no GraalVM on the development machines, so run the tracing agent in the build image against the integration tests:
+
+```bash
+sbt -batch stage
+docker run --rm -v "$PWD:/app" -w /app ghcr.io/graalvm/native-image-community:25 \
+  java -agentlib:native-image-agent=config-merge-dir=src/main/resources/META-INF/native-image/com.example/scalatra-ping-api \
+       -cp 'target/out/jvm/scala-*/scalatra-ping-api/universal/stage/lib/*' com.example.Server &
+# exercise every route (the ServerIntegrationSpec requests are a good script), then stop the process
+```
+
+`config-merge-dir` adds to the existing file instead of replacing it. Libraries that ship their own metadata, such as Micrometer, need nothing here. The CI job `Native Image Smoke Test` boots the image against PostgreSQL, restarts it, and checks `/metrics`, so a missing entry fails there before it reaches a deploy.
+
 ## Project layout
 
 ```text
@@ -426,6 +456,7 @@ src/main/scala/com/example/banking/               accounts, ledger, interest, ad
 src/main/scala/com/example/billpayment/          inquiry, confirm, settlement, reversal
 src/main/scala/com/example/biller/               standalone fake biller
 src/main/scala/com/example/infrastructure/       JDBC URL selection, pool, Flyway
+src/main/scala/com/example/observability/        request metrics, /metrics, ledger balance check
 src/main/resources/db/migration/                 V1 and V2 SQL
 src/test/scala/                                  ScalaTest, including Testcontainers
 spec/                                            extra design notes

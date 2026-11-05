@@ -2,7 +2,7 @@ package com.example
 
 import java.nio.charset.StandardCharsets
 import java.time.{Clock, Duration, Instant, ZoneId}
-import java.util.UUID
+import java.util.{EnumSet, UUID}
 
 import com.example.banking.application.{
   AccountMessageHandler,
@@ -35,42 +35,61 @@ import com.example.billpayment.infrastructure.{
 }
 import com.example.billpayment.ports.BillerGateway
 import com.example.infrastructure.{Database, DatabaseConfig, DatabaseVendor}
-import org.eclipse.jetty.ee11.servlet.{ServletContextHandler, ServletHolder}
-import org.eclipse.jetty.server.{NetworkConnector, Server as JettyServer}
+import com.example.observability.{LedgerBalanceCheck, Metrics, MetricsServlet, RequestMetricsFilter}
+import jakarta.servlet.DispatcherType
+import org.eclipse.jetty.ee11.servlet.{FilterHolder, ServletContextHandler, ServletHolder}
+import org.eclipse.jetty.server.{NetworkConnector, Server as JettyServer, ServerConnector}
+import org.eclipse.jetty.server.handler.ContextHandlerCollection
 
 private[example] final class BankingApiServer(
     private val server: JettyServer,
     private val messageBus: LocalMessageBus,
     private val database: Database,
-    private val interestScheduler: MonthlyInterestScheduler
+    private val interestScheduler: MonthlyInterestScheduler,
+    private val ledgerCheck: LedgerBalanceCheck
 ) extends AutoCloseable:
   def start(): Unit =
     server.start()
     interestScheduler.start()
+    ledgerCheck.start()
 
   def join(): Unit = server.join()
 
-  def port: Int =
-    server.getConnectors.collectFirst { case connector: NetworkConnector =>
-      connector.getLocalPort
-    }.getOrElse(throw new IllegalStateException("API server has no network connector"))
+  /** The application port (connector `app`). */
+  def port: Int = localPort(Server.AppConnector)
+
+  /** The port serving only `/metrics` (connector `metrics`). */
+  def metricsPort: Int = localPort(Server.MetricsConnector)
+
+  private def localPort(name: String): Int =
+    server.getConnectors.collectFirst {
+      case connector: NetworkConnector if connector.getName == name => connector.getLocalPort
+    }.getOrElse(throw new IllegalStateException(s"API server has no '$name' connector"))
 
   override def close(): Unit =
     try
-      try interestScheduler.close()
+      try ledgerCheck.close()
       finally
-        try server.stop()
-        finally messageBus.close()
+        try interestScheduler.close()
+        finally
+          try server.stop()
+          finally messageBus.close()
     finally database.close()
 
 object Server:
+  private[example] val AppConnector = "app"
+  private[example] val MetricsConnector = "metrics"
+  val DefaultMetricsPort = 9090
+
   def main(args: Array[String]): Unit =
     val port = sys.env.get("PORT").flatMap(_.toIntOption).getOrElse(8080)
-    val server = create(port)
+    val metricsPort = sys.env.get("METRICS_PORT").flatMap(_.toIntOption).getOrElse(DefaultMetricsPort)
+    val server = create(port, metricsPort)
 
     try
       server.start()
       println(s"API listening on http://localhost:${server.port}")
+      println(s"Metrics on http://localhost:${server.metricsPort}/metrics")
       server.join()
     finally server.close()
 
@@ -116,14 +135,19 @@ object Server:
         val dbName = config.jdbcUrl.split(":").lastOption.getOrElse("?").takeWhile(_ != ';')
         println(s"Database: H2 $dbType ($dbName)")
 
-  private[example] def create(port: Int): BankingApiServer =
+  /** Environment wiring with an ephemeral metrics port, for tests. */
+  private[example] def create(port: Int): BankingApiServer = create(port, metricsPort = 0)
+
+  /** Production wiring from the environment. */
+  private[example] def create(port: Int, metricsPort: Int): BankingApiServer =
     create(
       port,
       billerUrl = sys.env.get("BILLER_URL").filter(_.nonEmpty),
       adminToken = sys.env.get("ADMIN_TOKEN").filter(_.nonEmpty),
       adminPassword = sys.env.get("ADMIN_PASSWORD"),
       clock = Clock.systemUTC(),
-      businessZone = ZoneId.of("Asia/Bangkok")
+      businessZone = ZoneId.of("Asia/Bangkok"),
+      metricsPort = metricsPort
     )
 
   /** Uses the fake biller over HTTP when `billerUrl` is set, otherwise an in-process biller.
@@ -136,16 +160,34 @@ object Server:
       adminToken: Option[String],
       adminPassword: Option[String],
       clock: Clock,
-      businessZone: ZoneId
+      businessZone: ZoneId,
+      metricsPort: Int = 0
   ): BankingApiServer =
-    val server = new JettyServer(port)
+    val registry = Metrics.registry()
+    // Two named connectors: the UIs proxy /api/* to `app`, so /metrics lives on its own port and
+    // each context is pinned to one connector through the "@name" virtual host.
+    val server = new JettyServer()
+    val appConnector = new ServerConnector(server)
+    appConnector.setName(AppConnector)
+    appConnector.setPort(port)
+    val metricsConnector = new ServerConnector(server)
+    metricsConnector.setName(MetricsConnector)
+    metricsConnector.setPort(metricsPort)
+    server.addConnector(appConnector)
+    server.addConnector(metricsConnector)
     val context = new ServletContextHandler()
+    context.setVirtualHosts(java.util.List.of(s"@$AppConnector"))
+    val metricsContext = new ServletContextHandler()
+    metricsContext.setContextPath("/")
+    metricsContext.setVirtualHosts(java.util.List.of(s"@$MetricsConnector"))
+    metricsContext.addServlet(new ServletHolder(new MetricsServlet(registry)), "/metrics")
     val (dbUrl, dbUser, dbPassword) = databaseFromEnv()
     val poolSize = Database.poolSizeFrom(sys.env.get("DB_POOL_SIZE")).fold(
       error => throw new IllegalStateException(error),
       identity
     )
-    val database = Database.open(dbUrl, dbUser, dbPassword, poolSize)
+    val database = Database.open(dbUrl, dbUser, dbPassword, poolSize, Some(registry))
+    val ledgerCheck = new LedgerBalanceCheck(database, registry)
     val ledgerRepository = new H2LedgerRepository(database)
     val accountRepository = new H2AccountRepository(database)
     val accountOperations = new LedgerBackedAccountOperations(
@@ -227,6 +269,11 @@ object Server:
     context.setContextPath("/")
     // Development mode, the default, renders stack traces and route listings.
     context.setInitParameter("org.scalatra.environment", "production")
+    context.addFilter(
+      new FilterHolder(new RequestMetricsFilter(registry)),
+      "/*",
+      EnumSet.of(DispatcherType.REQUEST)
+    )
     context.addServlet(new ServletHolder(new PingServlet()), "/*")
     context.addServlet(
       new ServletHolder(
@@ -245,8 +292,8 @@ object Server:
       new ServletHolder(new AdminServlet(accountOperations, adjustmentService, Some(interestRateService), adminToken, adminPassword)),
       "/admin/*"
     )
-    server.setHandler(context)
-    new BankingApiServer(server, messageBus, database, interestScheduler)
+    server.setHandler(new ContextHandlerCollection(context, metricsContext))
+    new BankingApiServer(server, messageBus, database, interestScheduler, ledgerCheck)
 
   private def seedDemoAccounts(accountOperations: LedgerBackedAccountOperations): Unit =
     Vector("acc123", "acc456").foreach { rawAccountId =>

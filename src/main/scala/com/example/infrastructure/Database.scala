@@ -10,6 +10,8 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
 import com.zaxxer.hikari.HikariDataSource
+import com.zaxxer.hikari.metrics.micrometer.MicrometerMetricsTrackerFactory
+import io.micrometer.core.instrument.MeterRegistry
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.{ClassProvider, FlywayException, ResourceProvider}
 import org.flywaydb.core.api.migration.JavaMigration
@@ -162,10 +164,11 @@ object Database:
       url: String,
       user: String = "banking",
       password: String = "banking",
-      maxPoolSize: Int = DefaultPoolSize
+      maxPoolSize: Int = DefaultPoolSize,
+      meterRegistry: Option[MeterRegistry] = None
   ): Database =
     Schema.migrate(url, user, password)
-    new Database(url, user, password, maxPoolSize)
+    new Database(url, user, password, maxPoolSize, meterRegistry)
 
 object Schema:
   /** Every migration, in src/main/resources/db/migration. Add new files here too.
@@ -224,10 +227,16 @@ final class Database(
     val url: String,
     val user: String = "banking",
     val password: String = "banking",
-    val maxPoolSize: Int = Database.DefaultPoolSize
+    val maxPoolSize: Int = Database.DefaultPoolSize,
+    meterRegistry: Option[MeterRegistry] = None
 ) extends AutoCloseable:
   val dataSource: HikariDataSource =
     val hikariDataSource = new HikariDataSource()
+    hikariDataSource.setPoolName("banking")
+    // Must be set before the pool opens; publishes hikaricp_connections_* with pool="banking".
+    meterRegistry.foreach(registry =>
+      hikariDataSource.setMetricsTrackerFactory(new MicrometerMetricsTrackerFactory(registry))
+    )
     hikariDataSource.setJdbcUrl(url)
     hikariDataSource.setUsername(user)
     hikariDataSource.setPassword(password)

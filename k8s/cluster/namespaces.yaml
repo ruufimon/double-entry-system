@@ -16,3 +16,12 @@ metadata:
   name: prod
   labels:
     pod-security.kubernetes.io/enforce: restricted
+---
+# kube-prometheus-stack (#20). node-exporter needs host access, so this namespace is `baseline`,
+# not `restricted`.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    pod-security.kubernetes.io/enforce: baseline

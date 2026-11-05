@@ -251,7 +251,7 @@ jobs:
   # last build that reached pre-prod; the k8s branch never does.
   publish-preprod-images:
     name: Publish pre-prod image (${{ matrix.image }})
-    needs: [build, native-image-smoke, ui-unit, ui-e2e, admin-e2e]
+    needs: [build, native-image-smoke, ui-unit, ui-e2e, admin-e2e, monitoring-rules]
     if: >-
       vars.DO_DEPLOY == 'true' &&
       github.event_name == 'push' &&

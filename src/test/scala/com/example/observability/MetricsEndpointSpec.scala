@@ -76,6 +76,20 @@ final class MetricsEndpointSpec extends AnyFunSuite with Matchers with BeforeAnd
     body should include("""service="banking-api"""")
   }
 
+  test("arbitrary request methods collapse into one method label") {
+    for method <- Seq("FROB1", "FROB2", "FROB3") do app(method, "/accounts/metrics-spec/balance")
+    val body = scrape()
+    body should not include "FROB"
+    countLine(body, """method="OTHER"""", """route="unmatched"""") shouldBe Some(3.0)
+  }
+
+  test("the method label keeps standard methods and maps the rest to OTHER") {
+    Metrics.methodLabel("get") shouldBe "GET"
+    Metrics.methodLabel("DELETE") shouldBe "DELETE"
+    Metrics.methodLabel("PROPFIND") shouldBe "OTHER"
+    Metrics.methodLabel(null) shouldBe "OTHER"
+  }
+
   test("pool and ledger metrics are exposed") {
     val body = scrape()
     body should include("""hikaricp_connections_max{""")

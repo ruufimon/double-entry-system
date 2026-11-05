@@ -60,10 +60,10 @@ data:
               "uid": "${datasource}"
             },
             "query": {
-              "query": "label_values(slo:money_requests_total:rate5m, env)",
+              "query": "label_values(up{job=\"api\"}, env)",
               "refId": "env"
             },
-            "definition": "label_values(slo:money_requests_total:rate5m, env)",
+            "definition": "label_values(up{job=\"api\"}, env)",
             "current": {
               "selected": true,
               "text": "prod",

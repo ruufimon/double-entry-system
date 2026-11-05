@@ -103,7 +103,9 @@ alertmanager:
     inhibit_rules:
       - source_matchers: ['severity =~ "page|critical"']
         target_matchers: ['severity =~ "ticket|warning|info"']
-        equal: [env, alertname]
+        # The chart's Kubernetes alerts carry `namespace` but no `env`; matching both keeps a
+        # critical alert in one environment from hiding a warning in another.
+        equal: [env, namespace, alertname]
     route:
       receiver: ticket
       group_by: [alertname, env, namespace]
@@ -118,6 +120,11 @@ alertmanager:
         # Pre-production never pages (spec/MonitoringSLO.md, Explicit exclusions).
         - receiver: ticket
           matchers: ['env = "preprod"']
+          mute_time_intervals: [overnight]
+        # The chart's Kubernetes alerts (KubePodCrashLooping, KubePersistentVolumeFillingUp...)
+        # label the namespace, not env.
+        - receiver: ticket
+          matchers: ['namespace = "preprod"']
           mute_time_intervals: [overnight]
         - receiver: page
           matchers: ['severity =~ "page|critical"']

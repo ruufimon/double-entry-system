@@ -10,6 +10,7 @@ lazy val hikariVersion = "5.1.0"
 lazy val postgresVersion = "42.7.4"
 lazy val flywayVersion = "11.1.0"
 lazy val testcontainersVersion = "1.20.4"
+lazy val micrometerVersion = "1.17.2"
 
 lazy val root = (project in file("."))
   .enablePlugins(JavaAppPackaging)
@@ -28,6 +29,7 @@ lazy val root = (project in file("."))
       "com.zaxxer" % "HikariCP" % hikariVersion,
       "org.flywaydb" % "flyway-core" % flywayVersion,
       "org.flywaydb" % "flyway-database-postgresql" % flywayVersion % Runtime,
+      "io.micrometer" % "micrometer-registry-prometheus" % micrometerVersion,
       "org.slf4j" % "slf4j-simple" % "2.0.20" % Runtime,
       "org.scalatra" %% "scalatra-scalatest-jakarta" % scalatraVersion % Test,
       "org.testcontainers" % "testcontainers" % testcontainersVersion % Test,

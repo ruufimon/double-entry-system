@@ -109,6 +109,21 @@ jobs:
         start_api
         curl -sf http://localhost:8080/accounts/acc123/balance
         echo
+
+        # Metrics (#16-#18): the native binary must serve the money-class histogram, the Hikari
+        # pool gauges and the ledger balance gauge on the metrics port, and nothing on 8080.
+        curl -sf -X POST -H 'Content-Type: application/json' -d '{"amount":1.00}' \
+          http://localhost:8080/accounts/acc123/deposits > /dev/null
+        curl -sf http://localhost:9090/metrics > metrics.txt
+        grep -E 'http_server_requests_seconds_count\{.*class="money".*outcome="success"' metrics.txt
+        grep -E '^hikaricp_connections_max\{.*pool="banking"' metrics.txt
+        for attempt in $(seq 1 10); do
+          grep -E '^banking_ledger_unbalanced_transactions\{.*\} 0(\.0)?$' metrics.txt && break
+          sleep 1
+          curl -sf http://localhost:9090/metrics > metrics.txt
+        done
+        grep -E '^banking_ledger_unbalanced_transactions\{.*\} 0(\.0)?$' metrics.txt
+        [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/metrics)" = 404 ]
         docker rm -f api > /dev/null
 
   ui-unit:

@@ -39,6 +39,7 @@ You need `doctl` (logged in), `kubectl`, `helm` 3 and `openssl`. Neither `kubect
 `helm` needs root; the release binaries go in `~/.local/bin`:
 
 ```bash
+mkdir -p ~/.local/bin && export PATH="$HOME/.local/bin:$PATH"   # add the export to ~/.bashrc too
 KV=$(curl -fsSL https://dl.k8s.io/release/stable-1.36.txt)
 curl -fsSLO "https://dl.k8s.io/release/$KV/bin/linux/amd64/kubectl"
 echo "$(curl -fsSL "https://dl.k8s.io/release/$KV/bin/linux/amd64/kubectl.sha256")  kubectl" | sha256sum -c -
@@ -172,7 +173,7 @@ Alerts go to one webhook, the `url` key of the `alertmanager-webhook` secret. Th
 creates it with a placeholder, so **nothing is delivered until it is replaced**:
 
 ```bash
-kubectl -n monitoring create secret generic alertmanager-webhook --from-literal=url=<webhook-url> \
+kubectl -n monitoring create secret generic alertmanager-webhook --from-literal=url='<webhook-url>' \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 

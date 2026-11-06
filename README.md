@@ -419,9 +419,9 @@ curl -X PUT http://localhost:8080/admin/interest-rate \
 
 ## Monitoring
 
-The API records every request on `PORT` into `http_server_requests_seconds`, a Prometheus histogram with buckets at 25, 50, 100, 200, 500 ms and 1, 2, 5 s. Labels are bounded by design: `route` is the documented template from the API table (`/accounts/:accountId/deposits`), never the real path; `class` is `read`, `money`, `bill`, `probe` or `other`; `outcome` is `success`, `rejected`, `dependency`, `misconfigured` or `error`, decided from status and class as in [spec/MonitoringSLO.md](spec/MonitoringSLO.md). Unknown paths are `route="unmatched"`. Identifiers never become label values.
+The API records every request on `PORT` into `http_server_requests_seconds`, a Prometheus histogram with buckets at 25, 50, 100, 200, 500 ms and 1, 2, 5 s. Labels are bounded by design: `route` is the documented template from the API table (`/accounts/:accountId/deposits`), never the real path; `class` is `read`, `money`, `bill`, `probe` or `other`; `outcome` is `success`, `rejected`, `dependency`, `misconfigured` or `error`, decided from status and class as in [spec/MonitoringSLO.md](spec/MonitoringSLO.md). Unknown paths are `route="unmatched"`, and any method other than GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS is `method="OTHER"`. Identifiers never become label values.
 
-Also exposed: `hikaricp_connections_*{pool="banking"}` from the connection pool, and `banking_ledger_unbalanced_transactions`, recomputed every 60 seconds by a query that groups `ledger_entries` by transaction and counts those whose credits and debits do not cancel. It is `-1` until the first check and must otherwise be `0`; the check has a 2-second query timeout and reports `banking_ledger_check_duration_seconds{result="ok"|"skipped"|"failed"}`.
+Also exposed: `hikaricp_connections_*{pool="banking"}` from the connection pool, and `banking_ledger_unbalanced_transactions`, recomputed every 60 seconds by a query that groups `ledger_entries` by transaction and counts those whose credits and debits do not cancel. It is `-1` until the first check and must otherwise be `0`. The check never queues behind customer requests: it is `skipped` when every pooled connection is in use or its 2-second query timeout fires, and `failed` on any other error. Each run is timed as `banking_ledger_check_duration_seconds{result="ok"|"skipped"|"failed"}`.
 
 ```bash
 sbt run &
@@ -429,7 +429,7 @@ curl -s -X POST -H 'Content-Type: application/json' -d '{"amount":1.00}' localho
 curl -s localhost:9090/metrics | grep -E 'class="money"|ledger_unbalanced'
 ```
 
-The first SLO built on these metrics, its alert rules and dashboard are tracked in #9 (issues #16 to #23). In Kubernetes the metrics port is opened only to the `monitoring` namespace (`k8s/base/networkpolicy.yaml`).
+In Kubernetes the metrics port is opened only to the `monitoring` namespace (`k8s/base/networkpolicy.yaml`), where Prometheus scrapes it. The money SLO alerts and the Grafana dashboard built on these metrics run there; see [Monitoring in k8s/README.md](k8s/README.md#monitoring) for how to open Grafana, change the rules and connect alerts.
 
 ### Native image metadata
 

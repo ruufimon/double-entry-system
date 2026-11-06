@@ -19,7 +19,8 @@ come from Let's Encrypt, and HTTP redirects to HTTPS.
 
 ```
 k8s/
-  cluster/     cluster-wide pieces: namespaces, Traefik, Let's Encrypt issuers, CI access
+  cluster/     cluster-wide pieces: namespaces, Traefik, Let's Encrypt issuers, CI access,
+               and the monitoring stack (monitoring/)
   base/        the five apps, network policies and disruption budgets, and the Ingress
   overlays/    preprod and prod: namespace, image tags, hosts, the UIs' API address
   scripts/     bootstrap, secrets, and the CI kubeconfig
@@ -33,6 +34,23 @@ Traefik, only the UIs can reach the API, and only the API can reach the biller.
 Pods run as non-root under the `restricted` pod security standard.
 
 ## Setting up a cluster
+
+You need `doctl` (logged in), `kubectl`, `helm` 3 and `openssl`. Neither `kubectl` nor
+`helm` needs root; the release binaries go in `~/.local/bin`:
+
+```bash
+mkdir -p ~/.local/bin && export PATH="$HOME/.local/bin:$PATH"   # add the export to ~/.bashrc too
+KV=$(curl -fsSL https://dl.k8s.io/release/stable-1.36.txt)
+curl -fsSLO "https://dl.k8s.io/release/$KV/bin/linux/amd64/kubectl"
+echo "$(curl -fsSL "https://dl.k8s.io/release/$KV/bin/linux/amd64/kubectl.sha256")  kubectl" | sha256sum -c -
+install -m 755 kubectl ~/.local/bin/
+curl -fsSLO https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
+curl -fsSL https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum | sha256sum -c -
+tar xzf helm-v3.17.3-linux-amd64.tar.gz linux-amd64/helm && install -m 755 linux-amd64/helm ~/.local/bin/
+```
+
+The kubeconfig that `doctl` saves gives full admin access to the cluster. Keep it at
+mode 600 and never commit or share it; CI uses the namespace-scoped `deployer` instead.
 
 ```bash
 export KUBECONFIG=~/.kube/banking-k8s.yaml
@@ -88,8 +106,10 @@ up early.
 ## Monitoring
 
 `kube-prometheus-stack` runs in the `monitoring` namespace: Prometheus, Alertmanager, Grafana,
-kube-state-metrics and node-exporter. `bootstrap-cluster.sh` installs it from
-`cluster/monitoring/values.yaml` (chart pinned there) and applies the banking pieces:
+kube-state-metrics and node-exporter. It has been live on `banking-k8s` since 2026-11-06 and
+scrapes the API in both `preprod` and `prod`. `bootstrap-cluster.sh` installs it from
+`cluster/monitoring/values.yaml` (chart version pinned in the script) and applies the banking
+pieces:
 
 | File | What it does |
 | --- | --- |
@@ -101,26 +121,85 @@ Rule changes are checked by `monitoring/check-rules.sh` (promtool lint plus unit
 `cluster/monitoring/rules/tests/`), which CI also runs. Runbooks for every alert are in
 `docs/runbooks/`.
 
+### Changing the stack
+
+After editing `values.yaml`, the rules or the dashboard, apply just the monitoring part
+instead of re-running the whole bootstrap (which also re-applies Traefik and cert-manager):
+
 ```bash
-kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80        # Grafana, user admin
-kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d
-kubectl -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090        # Prometheus
-kubectl -n monitoring port-forward svc/kube-prometheus-stack-alertmanager 9093      # Alertmanager
+export KUBECONFIG=~/.kube/banking-k8s.yaml
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
+helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --version 92.18.0 --namespace monitoring --values k8s/cluster/monitoring/values.yaml --wait --timeout 10m
+kubectl apply -f k8s/cluster/monitoring/api-servicemonitor.yaml \
+  -f k8s/cluster/monitoring/rules/ -f k8s/cluster/monitoring/dashboards/
 ```
 
-Alerts go to one webhook, the `url` key of the `alertmanager-webhook` secret. The bootstrap
-creates it with a placeholder, so nothing is delivered until it is replaced. Production
-`page` alerts and default `critical` rules go to the page route; everything from `preprod`,
-`ticket` alerts and `warning` rules go to the ticket route. Both are muted 22:00 to 06:10
-Asia/Bangkok: overnight the stack is off with the rest of the cluster, and the mute covers
-the restart. Prometheus keeps 35 days (the SLO window is 30) on a 10 GiB volume that survives
-the nightly node deletion.
+Keep `--version` in step with `KUBE_PROMETHEUS_STACK_VERSION` in the bootstrap script. The
+install prints a `would violate PodSecurity "baseline"` warning for node-exporter; that is
+expected. The namespace enforces `privileged` because node-exporter needs host access, and
+warns at `baseline` so any other pod asking for it stands out.
 
-The stack requests about 1.1 GiB of memory across the two nodes, roughly twice what the apps
-request. The autoscaler may add the third node under load.
+### Opening Grafana, Prometheus and Alertmanager
+
+None of them has an Ingress. Reach them through a `kubectl port-forward` tunnel, which goes over
+the authenticated Kubernetes API and listens only on your own machine:
+
+```bash
+export KUBECONFIG=~/.kube/banking-k8s.yaml
+kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80          # http://localhost:3000
+kubectl -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090          # http://localhost:9090
+kubectl -n monitoring port-forward svc/kube-prometheus-stack-alertmanager 9093        # http://localhost:9093
+```
+
+Grafana's user is `admin`; the password was generated by the bootstrap:
+
+```bash
+kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d; echo
+```
+
+The SLO dashboard is at http://localhost:3000/d/money-slo/money-slo; pick the environment with
+the `env` selector. In Prometheus, **Status → Targets** should show `api` UP in both
+environments; if it does not, no other panel has data.
+
+Do not add `--address 0.0.0.0` to a port-forward, and do not expose these services through the
+load balancer. Prometheus and Alertmanager have no login (anyone could read every metric or
+silence every alert), and Grafana has only the one admin password. A public Grafana needs an
+authenticating proxy (OAuth or Cloudflare Access) in front of it first.
+
+### Alerts
+
+Alerts go to one webhook, the `url` key of the `alertmanager-webhook` secret. The bootstrap
+creates it with a placeholder, so **nothing is delivered until it is replaced**:
+
+```bash
+kubectl -n monitoring create secret generic alertmanager-webhook --from-literal=url='<webhook-url>' \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Production `page` alerts and default `critical` rules go to the page route; everything from
+`preprod` (by `env` or by `namespace`), `ticket` alerts and `warning` rules go to the ticket
+route. Both are muted 22:00 to 06:10 Asia/Bangkok: overnight the stack is off with the rest of
+the cluster, and the mute covers the restart.
+
+Expected with two nodes: `KubeCPUOvercommit` and `KubeMemoryOvercommit` fire as warnings,
+because the pods' requests would not fit on one node if the other failed. `Watchdog` always
+fires; it proves the alert pipeline works and is routed nowhere.
 
 To test the money SLO alert end to end, run `monitoring/synthetic/money-fast-burn.sh` against
 pre-production (it refuses production).
+
+### Sizing and labels
+
+Prometheus keeps 35 days (the SLO window is 30) on a 10 GiB volume that survives the nightly
+node deletion. The stack requests about 1.2 GiB of memory across the two nodes. Grafana needs
+512Mi of headroom: at 256Mi it was OOMKilled on first start, so its limit is 512Mi and its
+bundled extra plugins (Jaeger, Pyroscope, Loki and traces apps) are not downloaded. The
+autoscaler may add the third node under load.
+
+The API tags its metrics `service="banking-api"`, which collides with the `service` label the
+ServiceMonitor adds, so in Prometheus it appears as `exported_service="banking-api"`. Select
+the API with `job="api"` and an environment with `env`.
 
 ## Rollback
 

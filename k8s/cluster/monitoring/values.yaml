@@ -161,6 +161,13 @@ grafana:
       label: grafana_dashboard
       labelValue: "1"
       searchNamespace: ALL
+  # Grafana 13 skips downloading its bundled extra plugins (Jaeger, Pyroscope, Loki and
+  # traces apps). Only the built-in Prometheus data source is used, and the downloads alone
+  # pushed it past its memory limit on first start.
+  grafana.ini:
+    plugins:
+      preinstall_disabled: true
+  # 256Mi was OOMKilled during startup (dashboard search index plus migrations).
   resources:
-    requests: {cpu: 50m, memory: 128Mi}
-    limits: {memory: 256Mi}
+    requests: {cpu: 50m, memory: 256Mi}
+    limits: {memory: 512Mi}
